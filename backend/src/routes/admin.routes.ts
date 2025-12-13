@@ -22,7 +22,7 @@ import {
   systemLogFilterSchema,
 } from "../schemas";
 import { asyncHandler } from "../middleware/errorHandler";
-import { AdminService } from "../../../admin-service";
+import { AdminService } from "../services/admin.service";
 
 const router = express.Router();
 const adminService = new AdminService();

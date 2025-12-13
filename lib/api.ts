@@ -252,6 +252,28 @@ class ApiClient {
   // PAYMENT METHODS
   // ============================================
 
+  // Nigerian Payment Providers
+  async getPaymentProviders() {
+    const response = await this.client.get("/payments/providers");
+    return response.data;
+  }
+
+  async initializePayment(amount: number, provider: string) {
+    const response = await this.client.post("/payments/initialize", {
+      amount,
+      provider,
+    });
+    return response.data;
+  }
+
+  async verifyPayment(reference: string, provider: string) {
+    const response = await this.client.get(
+      `/payments/verify/${reference}?provider=${provider}`
+    );
+    return response.data;
+  }
+
+  // Legacy Stripe methods (kept for backwards compatibility)
   async createPaymentIntent(amount: number, currency: string = "USD") {
     const response = await this.client.post("/payments/deposit", {
       amount,
@@ -260,15 +282,11 @@ class ApiClient {
     return response.data;
   }
 
-  async requestWithdrawal(data: {
-    amount: number;
-    bankDetails: {
-      accountNumber: string;
-      bankName: string;
-      accountName: string;
-    };
-  }) {
-    const response = await this.client.post("/payments/withdraw", data);
+  async requestWithdrawal(amount: number, bankDetails: any) {
+    const response = await this.client.post("/payments/withdraw", {
+      amount,
+      bankDetails,
+    });
     return response.data;
   }
 

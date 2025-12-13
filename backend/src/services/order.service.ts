@@ -2,13 +2,12 @@
 // ORDER SERVICE - Core Business Logic
 // ============================================
 
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../config/database";
 import { RedisService } from "./redis.service";
-import { SMSManService } from "./providers/smsMan.service";
-import { TextVerifiedService } from "./providers/textVerified.service";
+import { SMSManService } from "./smsMan.service";
+import { TextVerifiedService } from "./textVerified.service";
 import { orderMonitorQueue } from "./queue.service";
 
-const prisma = new PrismaClient();
 const redis = new RedisService();
 
 interface CreateOrderInput {
@@ -407,109 +406,3 @@ export class SMSManService {
     return serviceMap[serviceCode] || serviceCode;
   }
 }
-
-// ============================================
-// EXPRESS API ROUTES
-// ============================================
-
-import express from "express";
-import { authenticate } from "./middleware/auth";
-import { validateRequest } from "./middleware/validation";
-import { orderLimiter } from "./middleware/rateLimit";
-import { createOrderSchema } from "./schemas";
-
-const router = express.Router();
-const orderService = new OrderService();
-
-// Create order
-router.post(
-  "/orders",
-  authenticate,
-  orderLimiter,
-  validateRequest(createOrderSchema),
-  async (req, res, next) => {
-    try {
-      const order = await orderService.createOrder({
-        userId: req.user.id,
-        serviceCode: req.body.serviceCode,
-        country: req.body.country,
-        preferredProvider: req.body.provider,
-      });
-
-      res.status(201).json({
-        success: true,
-        data: order,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-// Get order status
-router.get("/orders/:orderId", authenticate, async (req, res, next) => {
-  try {
-    const order = await orderService.getOrderStatus(req.params.orderId);
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        error: "Order not found",
-      });
-    }
-
-    res.json({
-      success: true,
-      data: order,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// List user orders
-router.get("/orders", authenticate, async (req, res, next) => {
-  try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const skip = (page - 1) * limit;
-
-    const [orders, total] = await Promise.all([
-      prisma.order.findMany({
-        where: { userId: req.user.id },
-        skip,
-        take: limit,
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          orderNumber: true,
-          serviceCode: true,
-          country: true,
-          phoneNumber: true,
-          status: true,
-          finalPrice: true,
-          createdAt: true,
-          expiresAt: true,
-        },
-      }),
-      prisma.order.count({
-        where: { userId: req.user.id },
-      }),
-    ]);
-
-    res.json({
-      success: true,
-      data: orders,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-export default router;

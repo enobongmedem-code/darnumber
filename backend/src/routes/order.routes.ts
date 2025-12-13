@@ -9,7 +9,7 @@ import { validateRequest, validateQuery } from "../middleware/validation";
 import { orderLimiter, apiLimiter } from "../middleware/rateLimit";
 import { createOrderSchema, orderIdSchema, paginationSchema } from "../schemas";
 import { asyncHandler } from "../middleware/errorHandler";
-import { OrderService } from "../../../order-service";
+import { OrderService } from "../services/order.service";
 
 const router = express.Router();
 const prisma = new PrismaClient();

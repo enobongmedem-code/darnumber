@@ -3,15 +3,19 @@
 // ============================================
 
 import Stripe from "stripe";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../config/database";
 import { RedisService } from "./redis.service";
 
-const prisma = new PrismaClient();
 const redis = new RedisService();
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-12-18.acacia",
-});
+// Initialize Stripe only if key is provided
+const stripe =
+  process.env.STRIPE_SECRET_KEY &&
+  process.env.STRIPE_SECRET_KEY !== "sk_test_placeholder"
+    ? new Stripe(process.env.STRIPE_SECRET_KEY, {
+        apiVersion: "2024-12-18.acacia",
+      })
+    : null;
 
 interface CreatePaymentIntentInput {
   userId: string;
@@ -26,6 +30,12 @@ export class PaymentService {
   // ============================================
 
   async createPaymentIntent(input: CreatePaymentIntentInput) {
+    if (!stripe) {
+      throw new Error(
+        "Stripe is not configured. Please use Nigerian payment providers."
+      );
+    }
+
     const { userId, amount, currency = "USD", metadata = {} } = input;
 
     const user = await prisma.user.findUnique({
@@ -85,6 +95,10 @@ export class PaymentService {
   // ============================================
 
   async handleStripeWebhook(payload: string, signature: string) {
+    if (!stripe) {
+      throw new Error("Stripe is not configured");
+    }
+
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
     let event: Stripe.Event;

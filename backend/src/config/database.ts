@@ -4,20 +4,8 @@
 
 import { PrismaClient } from "@prisma/client";
 
-// Connection pool configuration
-const connectionPoolConfig = {
-  connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || "20"),
-  poolTimeout: parseInt(process.env.DB_POOL_TIMEOUT || "10"),
-  connectTimeout: parseInt(process.env.DB_CONNECT_TIMEOUT || "10"),
-};
-
 // Primary database for writes
 export const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL,
-    },
-  },
   log:
     process.env.NODE_ENV === "development"
       ? ["query", "error", "warn"]
@@ -76,7 +64,9 @@ export async function checkDatabaseHealth() {
   }
 }
 
-// Middleware for query logging
+// Note: Prisma middleware ($use) is commented out as it may not be available in all versions
+// If you need query logging, consider using Prisma's built-in logging or extensions
+/*
 prisma.$use(async (params, next) => {
   const before = Date.now();
   const result = await next(params);
@@ -95,6 +85,7 @@ prisma.$use(async (params, next) => {
 
   return result;
 });
+*/
 
 // Handle graceful shutdown
 process.on("beforeExit", async () => {

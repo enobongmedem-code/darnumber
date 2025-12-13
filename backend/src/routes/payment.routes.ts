@@ -10,12 +10,18 @@ import {
   createPaymentIntentSchema,
   withdrawalRequestSchema,
   paginationSchema,
+  initializeNigerianPaymentSchema,
 } from "../schemas";
 import { asyncHandler } from "../middleware/errorHandler";
 import { PaymentService } from "../services/payment.service";
+import {
+  NigerianPaymentService,
+  PaymentProvider,
+} from "../services/nigerianPayment.service";
 
 const router = express.Router();
 const paymentService = new PaymentService();
+const nigerianPaymentService = new NigerianPaymentService();
 
 // Create payment intent (deposit)
 router.post(
@@ -97,9 +103,93 @@ router.get(
   })
 );
 
+// ============================================
+// NIGERIAN PAYMENT PROVIDERS
+// ============================================
+
+// Get available payment providers
+router.get(
+  "/providers",
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const providers = nigerianPaymentService.getAvailableProviders();
+
+    res.json({
+      success: true,
+      data: providers,
+    });
+  })
+);
+
+// Initialize payment with Nigerian providers
+router.post(
+  "/initialize",
+  authenticate,
+  paymentLimiter,
+  validateRequest(initializeNigerianPaymentSchema),
+  asyncHandler(async (req, res) => {
+    const { amount, provider } = req.body;
+
+    const result = await nigerianPaymentService.initializePayment({
+      userId: req.user.id,
+      amount,
+      email: req.user.email,
+      provider,
+      metadata: {
+        userEmail: req.user.email,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      data: result,
+    });
+  })
+);
+
+// Verify payment
+router.get(
+  "/verify/:reference",
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const { reference } = req.params;
+    const { provider } = req.query;
+
+    let result;
+
+    switch (provider) {
+      case PaymentProvider.PAYSTACK:
+        result = await nigerianPaymentService.verifyPaystackPayment(reference);
+        break;
+      case PaymentProvider.FLUTTERWAVE:
+        result = await nigerianPaymentService.verifyFlutterwavePayment(
+          reference
+        );
+        break;
+      case PaymentProvider.ETEGRAM:
+        result = await nigerianPaymentService.verifyEtegramPayment(reference);
+        break;
+      default:
+        return res.status(400).json({
+          success: false,
+          error: "Invalid payment provider",
+        });
+    }
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  })
+);
+
+// ============================================
+// WEBHOOKS
+// ============================================
+
 // Stripe webhook
 router.post(
-  "/webhook",
+  "/webhook/stripe",
   express.raw({ type: "application/json" }),
   asyncHandler(async (req, res) => {
     const signature = req.headers["stripe-signature"] as string;
@@ -112,6 +202,86 @@ router.post(
     }
 
     await paymentService.handleStripeWebhook(req.body.toString(), signature);
+
+    res.json({ received: true });
+  })
+);
+
+// Paystack webhook
+router.post(
+  "/webhook/paystack",
+  express.json(),
+  asyncHandler(async (req, res) => {
+    const signature = req.headers["x-paystack-signature"] as string;
+
+    if (!signature) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing paystack signature",
+      });
+    }
+
+    const verified = await nigerianPaymentService.handlePaystackWebhook(
+      req.body,
+      signature
+    );
+
+    if (!verified) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid signature",
+      });
+    }
+
+    res.json({ received: true });
+  })
+);
+
+// Flutterwave webhook
+router.post(
+  "/webhook/flutterwave",
+  express.json(),
+  asyncHandler(async (req, res) => {
+    const signature = req.headers["verif-hash"] as string;
+
+    if (!signature) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing flutterwave signature",
+      });
+    }
+
+    const verified = await nigerianPaymentService.handleFlutterwaveWebhook(
+      req.body,
+      signature
+    );
+
+    if (!verified) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid signature",
+      });
+    }
+
+    res.json({ received: true });
+  })
+);
+
+// Etegram webhook
+router.post(
+  "/webhook/etegram",
+  express.json(),
+  asyncHandler(async (req, res) => {
+    const verified = await nigerianPaymentService.handleEtegramWebhook(
+      req.body
+    );
+
+    if (!verified) {
+      return res.status(400).json({
+        success: false,
+        error: "Failed to process webhook",
+      });
+    }
 
     res.json({ received: true });
   })

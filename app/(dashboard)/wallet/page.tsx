@@ -10,18 +10,12 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert } from "@/components/ui/alert";
-import { loadStripe } from "@stripe/stripe-js";
-
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ""
-);
 
 export default function WalletPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [depositAmount, setDepositAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
@@ -45,38 +39,9 @@ export default function WalletPage() {
     }
   };
 
-  const handleDeposit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    const amount = parseFloat(depositAmount);
-    if (isNaN(amount) || amount < 5) {
-      setError("Minimum deposit amount is $5");
-      return;
-    }
-
-    setProcessing(true);
-
-    try {
-      const response = await api.createPaymentIntent(amount);
-
-      const stripe = await stripePromise;
-      if (!stripe) {
-        throw new Error("Stripe not loaded");
-      }
-
-      const { error: stripeError } = await stripe.redirectToCheckout({
-        sessionId: response.data.sessionId,
-      });
-
-      if (stripeError) {
-        setError(stripeError.message || "Payment failed");
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to process deposit");
-    } finally {
-      setProcessing(false);
-    }
+  const handleDeposit = () => {
+    // Navigate to checkout page
+    router.push("/wallet/checkout");
   };
 
   const handleWithdraw = async (e: React.FormEvent) => {
@@ -123,9 +88,9 @@ export default function WalletPage() {
       <h1 className="text-3xl font-bold">Wallet</h1>
 
       {/* Balance Card */}
-      <Card className="p-6 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+      <Card className="p-6 bg-gradient-to-r from-green-500 to-green-600 text-white">
         <p className="text-sm opacity-90">Available Balance</p>
-        <p className="text-5xl font-bold mt-2">${balance.toFixed(2)}</p>
+        <p className="text-5xl font-bold mt-2">₦{balance.toLocaleString()}</p>
       </Card>
 
       {error && <Alert variant="destructive">{error}</Alert>}
@@ -133,35 +98,33 @@ export default function WalletPage() {
       {/* Deposit/Withdraw Tabs */}
       <Tabs defaultValue="deposit">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="deposit">Deposit</TabsTrigger>
+          <TabsTrigger value="deposit">Fund Wallet</TabsTrigger>
           <TabsTrigger value="withdraw">Withdraw</TabsTrigger>
         </TabsList>
 
         <TabsContent value="deposit">
           <Card className="p-6">
-            <h2 className="text-xl font-bold mb-4">Add Funds</h2>
-            <form onSubmit={handleDeposit} className="space-y-4">
-              <div>
-                <Label htmlFor="depositAmount">Amount (USD)</Label>
-                <Input
-                  id="depositAmount"
-                  type="number"
-                  step="0.01"
-                  min="5"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  placeholder="Minimum $5"
-                  required
-                  disabled={processing}
-                />
-                <p className="text-sm text-muted-foreground mt-1">
-                  Minimum deposit: $5. Payment processed via Stripe.
-                </p>
+            <h2 className="text-xl font-bold mb-4">Fund Your Wallet</h2>
+            <p className="text-muted-foreground mb-6">
+              Add money to your wallet using Paystack, Flutterwave, or Etegram.
+              Fast, secure, and convenient Nigerian payment methods.
+            </p>
+            <div className="space-y-4">
+              <div className="bg-muted rounded-lg p-4">
+                <h3 className="font-semibold mb-2">
+                  ✨ Available Payment Methods
+                </h3>
+                <ul className="text-sm space-y-1 text-muted-foreground">
+                  <li>• Card Payments (Mastercard, Visa, Verve)</li>
+                  <li>• Bank Transfer</li>
+                  <li>• USSD</li>
+                  <li>• Mobile Money</li>
+                </ul>
               </div>
-              <Button type="submit" className="w-full" disabled={processing}>
-                {processing ? "Processing..." : "Continue to Payment"}
+              <Button onClick={handleDeposit} className="w-full" size="lg">
+                Continue to Checkout
               </Button>
-            </form>
+            </div>
           </Card>
         </TabsContent>
 
@@ -170,27 +133,28 @@ export default function WalletPage() {
             <h2 className="text-xl font-bold mb-4">Withdraw Funds</h2>
             <form onSubmit={handleWithdraw} className="space-y-4">
               <div>
-                <Label htmlFor="withdrawAmount">Amount (USD)</Label>
+                <Label htmlFor="withdrawAmount">Amount (NGN)</Label>
                 <Input
                   id="withdrawAmount"
                   type="number"
-                  step="0.01"
-                  min="10"
+                  step="1"
+                  min="1000"
                   max={balance}
                   value={withdrawAmount}
                   onChange={(e) => setWithdrawAmount(e.target.value)}
-                  placeholder="Minimum $10"
+                  placeholder="Minimum ₦1,000"
                   required
                   disabled={processing}
                 />
                 <p className="text-sm text-muted-foreground mt-1">
-                  Minimum withdrawal: $10. Processing takes 1-3 business days.
+                  Minimum withdrawal: ₦1,000. Processing takes 1-3 business
+                  days.
                 </p>
               </div>
               <Button
                 type="submit"
                 className="w-full"
-                disabled={processing || balance < 10}
+                disabled={processing || balance < 1000}
               >
                 {processing ? "Processing..." : "Request Withdrawal"}
               </Button>
@@ -227,8 +191,8 @@ export default function WalletPage() {
                         : "text-red-600"
                     }`}
                   >
-                    {tx.type === "DEPOSIT" || tx.type === "REFUND" ? "+" : "-"}$
-                    {tx.amount}
+                    {tx.type === "DEPOSIT" || tx.type === "REFUND" ? "+" : "-"}₦
+                    {Number(tx.amount).toLocaleString()}
                   </p>
                   <p className="text-sm text-muted-foreground">{tx.status}</p>
                 </div>

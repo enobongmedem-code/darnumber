@@ -93,6 +93,23 @@ export const createPaymentIntentSchema = z.object({
   currency: z.string().length(3).default("USD"),
 });
 
+// Nigerian Payment Providers Schema
+export const initializeNigerianPaymentSchema = z.object({
+  amount: z
+    .number()
+    .positive("Amount must be positive")
+    .min(100, "Minimum deposit is ₦100")
+    .max(1000000, "Maximum deposit is ₦1,000,000"),
+  provider: z.enum(["paystack", "flutterwave", "etegram"], {
+    errorMap: () => ({ message: "Invalid payment provider" }),
+  }),
+});
+
+export const verifyPaymentSchema = z.object({
+  reference: z.string().min(1, "Payment reference is required"),
+  provider: z.enum(["paystack", "flutterwave", "etegram"]),
+});
+
 export const withdrawalRequestSchema = z.object({
   amount: z
     .number()
