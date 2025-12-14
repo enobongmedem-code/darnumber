@@ -23,7 +23,7 @@ import paymentRoutes from "./routes/payment.routes";
 import adminRoutes from "./routes/admin.routes";
 
 const app: Express = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4001;
 
 // ============================================
 // MIDDLEWARE SETUP
