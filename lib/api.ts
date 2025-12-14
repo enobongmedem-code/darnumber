@@ -146,7 +146,9 @@ class ApiClient {
     country: string;
     provider?: string;
   }) {
+    console.log("API Client - Creating order:", data);
     const response = await this.client.post("/orders", data);
+    console.log("API Client - Order response:", response.data);
     return response.data;
   }
 
@@ -172,6 +174,13 @@ class ApiClient {
   }
 
   async getAvailableServices(country?: string, serviceCode?: string) {
+    const response = await this.client.get("/orders/services", {
+      params: { country, serviceCode },
+    });
+    return response.data;
+  }
+
+  async getAvailableProvidersForService(serviceCode: string, country: string) {
     const response = await this.client.get("/orders/services/available", {
       params: { country, serviceCode },
     });
