@@ -31,7 +31,7 @@ export default function WalletPage() {
     try {
       const [balanceRes, transactionsRes] = await Promise.all([
         api.getBalance(),
-        api.getTransactions(1, 10),
+        api.getTransactions(1, 5),
       ]);
       setBalance(balanceRes.data.balance);
       setTransactions(transactionsRes.data);
@@ -274,9 +274,18 @@ export default function WalletPage() {
 
         {/* Transaction History */}
         <Card className="p-4 md:p-6">
-          <h2 className="text-lg md:text-xl font-bold mb-4">
-            Recent Transactions
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg md:text-xl font-bold">
+              Recent Transactions
+            </h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push("/transactions")}
+            >
+              View All
+            </Button>
+          </div>
           <div className="space-y-2">
             {transactions.length === 0 ? (
               <p className="text-center text-muted-foreground py-4 text-sm md:text-base">

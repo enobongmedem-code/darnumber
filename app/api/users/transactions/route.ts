@@ -12,10 +12,31 @@ export async function GET(req: NextRequest) {
     const page = Number(sp.get("page") || 1);
     const limit = Number(sp.get("limit") || 20);
     const skip = (page - 1) * limit;
+    const search = sp.get("search") || undefined;
+    const type = sp.get("type") || undefined;
+    const status = sp.get("status") || undefined;
+
+    // Build where clause with filters
+    const where: any = { userId: session.user.id };
+
+    if (search) {
+      where.OR = [
+        { transactionNumber: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    if (type) {
+      where.type = type;
+    }
+
+    if (status) {
+      where.status = status;
+    }
 
     const [transactions, total] = await Promise.all([
       prisma.transaction.findMany({
-        where: { userId: session.user.id },
+        where,
         skip,
         take: limit,
         orderBy: { createdAt: "desc" },
@@ -36,7 +57,7 @@ export async function GET(req: NextRequest) {
           updatedAt: true,
         },
       }),
-      prisma.transaction.count({ where: { userId: session.user.id } }),
+      prisma.transaction.count({ where }),
     ]);
 
     console.log("[Route][Users][Transactions] Fetched successfully", {

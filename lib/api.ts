@@ -210,10 +210,21 @@ class ApiClient {
     return response.data;
   }
 
-  async getTransactions(page: number = 1, limit: number = 20) {
-    const response = await this.client.get("/users/transactions", {
-      params: { page, limit },
-    });
+  async getTransactions(
+    page: number = 1,
+    limit: number = 20,
+    filters?: {
+      search?: string;
+      type?: string;
+      status?: string;
+    }
+  ) {
+    const params: any = { page, limit };
+    if (filters?.search) params.search = filters.search;
+    if (filters?.type) params.type = filters.type;
+    if (filters?.status) params.status = filters.status;
+
+    const response = await this.client.get("/users/transactions", { params });
     // Backend returns {ok: true, data: {transactions: [], pagination: {}}}
     return {
       data: response.data.data?.transactions || [],
