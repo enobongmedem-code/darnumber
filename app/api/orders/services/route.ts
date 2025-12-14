@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/server/auth";
 import { json, error } from "@/lib/server/utils/response";
 import { prisma } from "@/lib/server/prisma";
+import { getServiceLogo } from "@/lib/constants/services";
+import { PROVIDERS } from "@/lib/constants/providers";
 
 export const runtime = "nodejs";
 
@@ -131,11 +133,17 @@ export async function GET(req: NextRequest) {
             Number(pricing.baseCost)
           );
 
+          const uiLogo = getServiceLogo(service.serviceCode);
           servicesMap.set(key, {
             code: service.serviceCode,
             name: service.serviceName,
             country: service.country,
             price: finalPrice,
+            ui: {
+              logo: uiLogo.logo,
+              color: uiLogo.color,
+              displayName: uiLogo.name,
+            },
             providers: [
               {
                 id: service.provider.id,
@@ -162,16 +170,38 @@ export async function GET(req: NextRequest) {
 
     const result = {
       services: Array.from(servicesMap.values()),
-      providers: providers.map((p) => ({
-        id: p.id,
-        name: p.name,
-        displayName: p.displayName,
-      })),
+      providers: providers.map((p) => {
+        // Try to enrich provider with logo and coverage info from constants
+        const provName = (p.name || p.displayName || "").toLowerCase();
+        const isLion =
+          provName.includes("lion") || provName.includes("sms-man");
+        const isPanda =
+          provName.includes("panda") || provName.includes("textverified");
+        const logo = isLion
+          ? PROVIDERS.LION.logo
+          : isPanda
+          ? PROVIDERS.PANDA.logo
+          : "☎️";
+        const cover = isLion
+          ? "All Countries"
+          : isPanda
+          ? "United States"
+          : "Varies";
+        return {
+          id: p.id,
+          name: p.name,
+          displayName: p.displayName,
+          logo,
+          cover,
+        };
+      }),
     };
 
     console.log("8. ✅ Returning services:", {
       servicesCount: result.services.length,
       providersCount: result.providers.length,
+      sampleService: result.services[0] || null,
+      sampleProvider: result.providers[0] || null,
     });
 
     console.log("=== GET /api/orders/services END (SUCCESS) ===");

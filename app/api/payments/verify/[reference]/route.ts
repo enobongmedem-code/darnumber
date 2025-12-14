@@ -7,17 +7,30 @@ export const runtime = "nodejs";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { reference: string } }
+  { params }: { params: Promise<{ reference: string }> }
 ) {
   try {
     const session = await requireAuth();
+    const { reference } = await params;
     const sp = new URL(req.url).searchParams;
     const provider = sp.get("provider");
     if (!provider) return error("provider required", 400);
+    if (!reference) return error("reference required", 400);
+
+    console.log(
+      "[Route][Verify]",
+      "reference=",
+      reference,
+      "provider=",
+      provider,
+      "userId=",
+      session.user.id
+    );
+
     const svc = new PaymentService();
     const data = await svc.verifyPayment({
       userId: session.user.id,
-      reference: params.reference,
+      reference,
       provider: provider as any,
     });
     return json({ ok: true, data });
@@ -25,6 +38,7 @@ export async function GET(
     if (e instanceof Error && e.message === "Unauthorized")
       return error("Unauthorized", 401);
     const msg = e instanceof Error ? e.message : "Unexpected error";
+    console.error("[Route][Verify] Error:", msg);
     return error(msg, 400);
   }
 }

@@ -78,7 +78,25 @@ export class OrderService {
     });
 
     try {
-      const providerService = new SMSManService();
+      // Decide provider adapter based on selected provider
+      const selectedProvider = providers[0];
+      const provName = (selectedProvider.name || "").toLowerCase();
+      console.log("[OrderService] Selected provider:", selectedProvider);
+
+      const useLion = provName.includes("lion") || provName.includes("sms-man");
+      const usePanda =
+        provName.includes("panda") || provName.includes("textverified");
+
+      const providerService = useLion
+        ? new SMSManService()
+        : new TextVerifiedService();
+
+      console.log(
+        "[OrderService] Requesting number from",
+        useLion ? "Lion (SMS-Man)" : "Panda (TextVerified)",
+        { serviceCode, country }
+      );
+
       const providerOrder = await providerService.requestNumber(
         serviceCode,
         country
@@ -104,6 +122,7 @@ export class OrderService {
         expiresAt: order.expiresAt,
       };
     } catch (e) {
+      console.error("[OrderService] Provider request failed:", e);
       await this.refundOrder(order.id);
       throw new Error("Failed to create order with provider");
     }
@@ -178,8 +197,12 @@ export class OrderService {
   }
 
   async getOrderStatus(orderId: string) {
+    console.log("[OrderService] getOrderStatus ->", { orderId });
     const cached = await redis.getOrderStatus(orderId);
-    if (cached) return cached;
+    if (cached) {
+      console.log("[OrderService] cache hit", cached);
+      return cached;
+    }
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       select: {
@@ -191,10 +214,26 @@ export class OrderService {
         smsText: true,
         expiresAt: true,
         createdAt: true,
+        finalPrice: true,
+        currency: true,
+        serviceCode: true,
+        country: true,
+        provider: {
+          select: { name: true, displayName: true },
+        },
       },
     });
-    if (order) await redis.setOrderStatus(orderId, order, 300);
-    return order;
+    if (!order) return null;
+    const payload = {
+      ...order,
+      provider:
+        order.provider?.displayName || order.provider?.name || undefined,
+    } as any;
+    delete (payload as any).provider?.displayName;
+    delete (payload as any).provider?.name;
+    await redis.setOrderStatus(orderId, payload, 300);
+    console.log("[OrderService] getOrderStatus payload", payload);
+    return payload;
   }
 
   async refundOrder(orderId: string) {
@@ -252,13 +291,16 @@ export class SMSManService {
   private apiKey = process.env.SMSMAN_API_KEY || "";
 
   async requestNumber(serviceCode: string, country: string) {
+    console.log("[SMSManService] requestNumber", { serviceCode, country });
     const url = `${this.apiUrl}/get-number?token=${
       this.apiKey
     }&country_id=${this.getCountryId(
       country
     )}&application_id=${this.getServiceId(serviceCode)}`;
+    console.log("[SMSManService] GET", url);
     const res = await fetch(url);
     const data = await res.json();
+    console.log("[SMSManService] Response", data);
     if (data.error_code) throw new Error(data.error);
     return { id: data.request_id, phoneNumber: data.number };
   }
@@ -274,5 +316,34 @@ export class SMSManService {
       whatsapp: "wa",
     };
     return map[serviceCode] || serviceCode;
+  }
+}
+
+// Minimal TextVerified provider adapter with detailed logging
+export class TextVerifiedService {
+  private apiUrl = "https://api.textverified.com/v2";
+  private apiKey = process.env.TEXTVERIFIED_API_KEY || "";
+
+  async requestNumber(serviceCode: string, country: string) {
+    console.log("[TextVerifiedService] requestNumber", {
+      serviceCode,
+      country,
+    });
+    if (!this.apiKey) {
+      console.warn("[TextVerifiedService] Missing TEXTVERIFIED_API_KEY");
+      throw new Error("TextVerified API key not configured");
+    }
+    // Placeholder: real implementation would create a verification task and fetch a number
+    // Here we log intent and throw to avoid undefined behavior without proper setup
+    console.log(
+      "[TextVerifiedService] Would create task via API",
+      this.apiUrl,
+      {
+        headers: "Authorization: Bearer <API_KEY>",
+        serviceCode,
+        country,
+      }
+    );
+    throw new Error("TextVerified integration not implemented yet");
   }
 }

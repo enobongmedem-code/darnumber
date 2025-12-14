@@ -134,7 +134,10 @@ export default function NewOrderPage() {
         );
       };
 
-      const resolvedProviders = HARDCODED_PROVIDERS.map(resolveProvider);
+      const resolvedProviders =
+        providersFromApi && providersFromApi.length > 0
+          ? providersFromApi
+          : HARDCODED_PROVIDERS.map(resolveProvider);
       // Ensure uniqueness by displayName (or id) to avoid duplicates
       const uniqueByKey = new Map<string, Provider>();
       resolvedProviders.forEach((p) => {
@@ -225,12 +228,14 @@ export default function NewOrderPage() {
 
   // Reset selections when provider changes
   useEffect(() => {
+    console.log("[NewOrderPage] Provider changed", selectedProvider);
     setSelectedService("");
     setSelectedCountry("");
   }, [selectedProvider]);
 
   // Reset country when service changes
   useEffect(() => {
+    console.log("[NewOrderPage] Service changed", selectedService);
     setSelectedCountry("");
   }, [selectedService]);
 
@@ -455,19 +460,16 @@ export default function NewOrderPage() {
                         {providers.map((provider) => {
                           // Map provider icons based on name
                           const getProviderIcon = (name: string) => {
-                            if (
-                              name.toLowerCase().includes("lion") ||
+                            return (
+                              (provider as any).logo ||
+                              (name.toLowerCase().includes("lion") ||
                               name.toLowerCase().includes("sms-man")
-                            ) {
-                              return "🦁";
-                            }
-                            if (
-                              name.toLowerCase().includes("panda") ||
-                              name.toLowerCase().includes("textverified")
-                            ) {
-                              return "🐼";
-                            }
-                            return provider.displayName.charAt(0);
+                                ? "🦁"
+                                : name.toLowerCase().includes("panda") ||
+                                  name.toLowerCase().includes("textverified")
+                                ? "🐼"
+                                : provider.displayName.charAt(0))
+                            );
                           };
 
                           const getProviderBg = (name: string) => {
@@ -546,19 +548,16 @@ export default function NewOrderPage() {
                     providers.map((provider) => {
                       // Map provider icons based on name
                       const getProviderIcon = (name: string) => {
-                        if (
-                          name.toLowerCase().includes("lion") ||
+                        return (
+                          (provider as any).logo ||
+                          (name.toLowerCase().includes("lion") ||
                           name.toLowerCase().includes("sms-man")
-                        ) {
-                          return "🦁";
-                        }
-                        if (
-                          name.toLowerCase().includes("panda") ||
-                          name.toLowerCase().includes("textverified")
-                        ) {
-                          return "🐼";
-                        }
-                        return provider.displayName.charAt(0);
+                            ? "🦁"
+                            : name.toLowerCase().includes("panda") ||
+                              name.toLowerCase().includes("textverified")
+                            ? "🐼"
+                            : provider.displayName.charAt(0))
+                        );
                       };
 
                       const getProviderBg = (name: string) => {
@@ -686,8 +685,17 @@ export default function NewOrderPage() {
                     ) : (
                       filteredServices.map((service) => (
                         <SelectItem key={service.code} value={service.code}>
-                          <div className="flex items-center gap-2 py-1">
-                            <span className="font-medium">{service.name}</span>
+                          <div className="flex items-center gap-3 py-1">
+                            <div
+                              className={`w-6 h-6 rounded-md flex items-center justify-center text-xs ${
+                                (service as any).ui?.color || "bg-gray-200"
+                              }`}
+                            >
+                              {(service as any).ui?.logo || "📱"}
+                            </div>
+                            <span className="font-medium">
+                              {(service as any).ui?.displayName || service.name}
+                            </span>
                           </div>
                         </SelectItem>
                       ))
@@ -835,7 +843,10 @@ export default function NewOrderPage() {
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Service:</span>
-                    <span className="font-semibold">{currentService.name}</span>
+                    <span className="font-semibold">
+                      {(currentService as any).ui?.displayName ||
+                        currentService.name}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Country:</span>
