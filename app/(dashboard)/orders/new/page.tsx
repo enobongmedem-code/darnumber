@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useDeferredValue } from "react";
+import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -8,13 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+// Removed Radix Select in favor of virtualized Dialog lists
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -31,12 +26,21 @@ import {
   Wallet,
   ChevronRight,
 } from "lucide-react";
+import { FixedSizeList as List } from "react-window";
+import type { ListChildComponentProps } from "react-window";
 
 interface Provider {
   id: string;
   name: string;
   displayName: string;
   cover: string;
+  logo?: ReactNode | string;
+}
+
+interface ServiceUi {
+  displayName?: string;
+  color?: string;
+  logo?: ReactNode | string;
 }
 
 interface Service {
@@ -45,6 +49,7 @@ interface Service {
   country: string;
   price: number;
   providers: Provider[];
+  ui?: ServiceUi;
 }
 
 export default function NewOrderPage() {
@@ -61,6 +66,41 @@ export default function NewOrderPage() {
   const [serviceSearch, setServiceSearch] = useState("");
   const [countrySearch, setCountrySearch] = useState("");
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
+  const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
+  const [countryDialogOpen, setCountryDialogOpen] = useState(false);
+  const [countryNameByCode, setCountryNameByCode] = useState<
+    Map<string, string>
+  >(new Map());
+
+  const deferredServiceSearch = useDeferredValue(serviceSearch);
+  const deferredCountrySearch = useDeferredValue(countrySearch);
+
+  // Fetch countries from SMS-Man API and map code -> full name
+  useEffect(() => {
+    const loadCountries = async () => {
+      try {
+        const res = await fetch(
+          "https://api.sms-man.com/control/countries?token=73443e6f24e7883adcbfb3d3fae11de7"
+        );
+        if (!res.ok) throw new Error("Failed to fetch countries");
+        const data = (await res.json()) as Record<
+          string,
+          { id: string; title: string; code: string }
+        >;
+        const map = new Map<string, string>();
+        Object.values(data).forEach((c) => {
+          if (c?.code) {
+            map.set(String(c.code).toUpperCase(), c.title);
+          }
+        });
+        setCountryNameByCode(map);
+      } catch (e) {
+        console.error("[NewOrderPage] Failed to fetch countries list:", e);
+        // Leave map empty; UI will fall back to service.country
+      }
+    };
+    loadCountries();
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -68,58 +108,23 @@ export default function NewOrderPage() {
 
   const fetchData = async () => {
     try {
-      console.log("[NewOrderPage] Starting fetchData...");
+      console.log("[NewOrderPage] Fetching services and balance...");
 
       const [servicesRes, balanceRes] = await Promise.all([
         api.getAvailableServices(),
         api.getBalance(),
       ]);
 
-      // Enhanced logging to aid debugging of provider/service population
-      console.group("[NewOrderPage] fetchData");
-      console.log("raw servicesRes:", servicesRes);
-      console.log("raw balanceRes:", balanceRes);
-      console.log("servicesRes.ok:", servicesRes?.ok);
-      console.log("servicesRes.data:", servicesRes?.data);
-
       const services: Service[] = servicesRes?.data?.services || [];
       const providersFromApi: Provider[] = servicesRes?.data?.providers || [];
 
-      console.log("services count:", services.length);
-      console.log("services sample:", services.slice(0, 3));
-      console.log("providersFromApi count:", providersFromApi.length);
-      console.log("providersFromApi:", providersFromApi);
-
-      // Fallback: derive providers from services when API doesn't return providers array
-      const derivedProvidersMap = new Map<string, Provider>();
-      services.forEach((s) => {
-        console.log(
-          "Processing service:",
-          s.code,
-          s.name,
-          "providers:",
-          s.providers
-        );
-        s.providers?.forEach((p) => {
-          if (p?.id && !derivedProvidersMap.has(p.id)) {
-            derivedProvidersMap.set(p.id, {
-              id: p.id,
-              name: p.name,
-              displayName: p.displayName || p.name,
-              cover: "",
-            });
-          }
-        });
-      });
-
-      const derivedProviders = Array.from(derivedProvidersMap.values());
-      console.log("derivedProviders count:", derivedProviders.length);
-      console.log("derivedProviders:", derivedProviders);
+      console.log(
+        `[NewOrderPage] Loaded ${services.length} services from ${providersFromApi.length} providers`
+      );
 
       setAllServices(services);
-      console.log("Set allServices with", services.length, "services");
 
-      // Use providers from API directly (they're now hardcoded in the backend)
+      // Use providers from API or fallback to defaults
       const finalProviders =
         providersFromApi.length > 0
           ? providersFromApi
@@ -138,26 +143,16 @@ export default function NewOrderPage() {
               },
             ];
 
-      console.log("finalProviders:", finalProviders);
       setProviders(finalProviders);
       setBalance(balanceRes.data.balance);
-      console.log("balance:", balanceRes.data.balance);
 
-      // Set default provider if available
+      // Set default provider
       if (finalProviders.length > 0) {
-        setSelectedProvider(finalProviders[0].id || "lion");
-        console.log(
-          "selected default provider:",
-          finalProviders[0].id,
-          finalProviders[0]
-        );
-      } else {
-        console.warn("No providers available!");
+        setSelectedProvider(finalProviders[0].id);
       }
-      console.groupEnd();
     } catch (error) {
       console.error("[NewOrderPage] Failed to fetch data:", error);
-      setError("Failed to load services");
+      setError("Failed to load services. Please refresh the page.");
     } finally {
       setLoading(false);
     }
@@ -165,15 +160,7 @@ export default function NewOrderPage() {
 
   // Get unique service codes for the selected provider
   const availableServices = useMemo(() => {
-    console.log("[availableServices] Computing...", {
-      selectedProvider,
-      allServicesCount: allServices.length,
-    });
-
-    if (!selectedProvider) {
-      console.log("[availableServices] No provider selected");
-      return [];
-    }
+    if (!selectedProvider || !allServices.length) return [];
 
     const serviceMap = new Map<string, Service>();
 
@@ -181,22 +168,12 @@ export default function NewOrderPage() {
       const hasProvider = service.providers.some(
         (p) => p.id === selectedProvider
       );
-      console.log(`[availableServices] Service ${service.code}:`, {
-        providers: service.providers.map((p) => p.id),
-        hasProvider,
-        selectedProvider,
-      });
-
-      if (hasProvider) {
-        if (!serviceMap.has(service.code)) {
-          serviceMap.set(service.code, service);
-        }
+      if (hasProvider && !serviceMap.has(service.code)) {
+        serviceMap.set(service.code, service);
       }
     });
 
-    const result = Array.from(serviceMap.values());
-    console.log("[availableServices] Result:", result.length, "services");
-    return result;
+    return Array.from(serviceMap.values());
   }, [allServices, selectedProvider]);
 
   // Get available countries for selected service and provider
@@ -211,43 +188,75 @@ export default function NewOrderPage() {
       )
       .map((s) => ({
         code: s.country,
-        name: s.country, // Will be enhanced with full name from API
+        name:
+          countryNameByCode.get(String(s.country).toUpperCase()) || s.country,
         price: s.price,
       }));
 
     return countries;
-  }, [allServices, selectedService, selectedProvider]);
+  }, [allServices, selectedService, selectedProvider, countryNameByCode]);
 
   // Filter services based on search
+  // Lightweight fuzzy search scoring
+  const fuzzyScore = (text: string, query: string) => {
+    const t = text.toLowerCase();
+    const q = query.toLowerCase();
+    if (!q) return 0;
+    if (t.includes(q)) return 100 - t.indexOf(q); // prefer early matches
+    // subsequence match
+    let ti = 0,
+      qi = 0,
+      score = 0;
+    while (ti < t.length && qi < q.length) {
+      if (t[ti] === q[qi]) {
+        score += 5; // reward matched char
+        qi++;
+      }
+      ti++;
+    }
+    // small bonus if all chars found
+    if (qi === q.length) score += 20;
+    return score;
+  };
+
   const filteredServices = useMemo(() => {
-    if (!serviceSearch) return availableServices;
-    return availableServices.filter(
-      (service) =>
-        service.name?.toLowerCase().includes(serviceSearch.toLowerCase()) ||
-        service.code?.toLowerCase().includes(serviceSearch.toLowerCase())
-    );
-  }, [availableServices, serviceSearch]);
+    const query = deferredServiceSearch || "";
+    if (!query) return availableServices;
+    return [...availableServices]
+      .map((service) => {
+        const display = service.ui?.displayName || service.name || "";
+        const s1 = fuzzyScore(display, query);
+        const s2 = fuzzyScore(service.code || "", query);
+        return { service, score: Math.max(s1, s2) };
+      })
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((x) => x.service);
+  }, [availableServices, deferredServiceSearch]);
 
   // Filter countries based on search
   const filteredCountries = useMemo(() => {
-    if (!countrySearch) return availableCountries;
-    return availableCountries.filter(
-      (country) =>
-        country.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
-        country.code.toLowerCase().includes(countrySearch.toLowerCase())
-    );
-  }, [availableCountries, countrySearch]);
+    const query = deferredCountrySearch || "";
+    if (!query) return availableCountries;
+    return [...availableCountries]
+      .map((country) => {
+        const s1 = fuzzyScore(country.name, query);
+        const s2 = fuzzyScore(country.code, query);
+        return { country, score: Math.max(s1, s2) };
+      })
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((x) => x.country);
+  }, [availableCountries, deferredCountrySearch]);
 
   // Reset selections when provider changes
   useEffect(() => {
-    console.log("[NewOrderPage] Provider changed", selectedProvider);
     setSelectedService("");
     setSelectedCountry("");
   }, [selectedProvider]);
 
   // Reset country when service changes
   useEffect(() => {
-    console.log("[NewOrderPage] Service changed", selectedService);
     setSelectedCountry("");
   }, [selectedService]);
 
@@ -296,10 +305,13 @@ export default function NewOrderPage() {
       } else {
         setError(response.error || "Failed to create order");
       }
-    } catch (err: any) {
-      setError(
-        err.response?.data?.error || "Failed to create order. Please try again."
-      );
+    } catch (err: unknown) {
+      let message = "Failed to create order. Please try again.";
+      if (typeof err === "object" && err && "response" in err) {
+        const e = err as { response?: { data?: { error?: string } } };
+        message = e.response?.data?.error || message;
+      }
+      setError(message);
     } finally {
       setCreating(false);
     }
@@ -318,6 +330,67 @@ export default function NewOrderPage() {
   );
   const currentProvider = providers.find((p) => p.id === selectedProvider);
   const insufficientBalance = currentService && balance < currentService.price;
+
+  // Virtualized row renderer for services list
+  const renderServiceRow = ({ index, style }: ListChildComponentProps) => {
+    const service = filteredServices[index];
+    const displayName = service.ui?.displayName || service.name;
+    const colorClass = "bg-gray-200"; // unify service badge color
+    const logo = "📱"; // unify service icon
+    return (
+      <div
+        style={style}
+        key={`${service.code}-${service.country}`}
+        className="px-3 py-2 border-b last:border-b-0"
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedService(service.code);
+            setServiceDialogOpen(false);
+          }}
+          className="w-full flex items-center gap-3 text-left hover:bg-accent rounded-md px-2 py-2"
+        >
+          <div
+            className={`w-6 h-6 rounded-md flex items-center justify-center text-xs ${colorClass}`}
+          >
+            {logo}
+          </div>
+          <span className="font-medium truncate flex-1">{displayName}</span>
+        </button>
+      </div>
+    );
+  };
+
+  // Virtualized row renderer for countries list
+  const renderCountryRow = ({ index, style }: ListChildComponentProps) => {
+    const country = filteredCountries[index];
+    const logo = null; // remove hardcoded symbol
+    return (
+      <div
+        style={style}
+        key={country.code}
+        className="px-3 py-2 border-b last:border-b-0"
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedCountry(country.code);
+            setCountryDialogOpen(false);
+          }}
+          className="w-full flex items-center justify-between gap-3 text-left hover:bg-accent rounded-md px-2 py-2"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 rounded-md flex items-center justify-center text-xs bg-gray-200"></div>
+            <span className="font-medium truncate">{country.name}</span>
+          </div>
+          <span className="font-bold text-primary">
+            ₦{country.price.toLocaleString()}
+          </span>
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="container mx-auto p-4 md:p-6 max-w-7xl">
@@ -473,7 +546,7 @@ export default function NewOrderPage() {
                           // Map provider icons based on name
                           const getProviderIcon = (name: string) => {
                             return (
-                              (provider as any).logo ||
+                              provider.logo ||
                               (name.toLowerCase().includes("lion") ||
                               name.toLowerCase().includes("sms-man")
                                 ? "🦁"
@@ -561,7 +634,7 @@ export default function NewOrderPage() {
                       // Map provider icons based on name
                       const getProviderIcon = (name: string) => {
                         return (
-                          (provider as any).logo ||
+                          provider.logo ||
                           (name.toLowerCase().includes("lion") ||
                           name.toLowerCase().includes("sms-man")
                             ? "🦁"
@@ -653,12 +726,9 @@ export default function NewOrderPage() {
                 </div>
               </div>
 
-              {/* Service Selection */}
+              {/* Service Selection - Virtualized Dialog */}
               <div>
-                <Label
-                  htmlFor="service"
-                  className="mb-2 block text-base font-semibold"
-                >
+                <Label className="mb-2 block text-base font-semibold">
                   Service
                   {availableServices.length > 0 && (
                     <Badge
@@ -669,67 +739,79 @@ export default function NewOrderPage() {
                     </Badge>
                   )}
                 </Label>
-                <div className="relative mb-2">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search services..."
-                    value={serviceSearch}
-                    onChange={(e) => setServiceSearch(e.target.value)}
-                    className="pl-9 h-11"
-                    disabled={creating || !selectedProvider}
-                  />
-                </div>
-                <Select
-                  value={selectedService}
-                  onValueChange={(value) => {
-                    console.log("[NewOrderPage] Service selected:", value);
-                    setSelectedService(value);
-                  }}
-                  disabled={creating || !selectedProvider}
+
+                <Dialog
+                  open={serviceDialogOpen}
+                  onOpenChange={setServiceDialogOpen}
                 >
-                  <SelectTrigger className="h-12 text-base" id="service">
-                    <SelectValue placeholder="Select a service" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
-                    {filteredServices.length === 0 ? (
-                      <div className="p-4 text-center text-sm text-muted-foreground">
-                        {selectedProvider
-                          ? serviceSearch
-                            ? "No services match your search"
-                            : "No services available for this provider"
-                          : "Please select a provider first"}
+                  <DialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-12 justify-between text-left"
+                      disabled={creating || !selectedProvider}
+                    >
+                      {selectedService ? (
+                        <span className="truncate">
+                          {allServices.find((s) => s.code === selectedService)
+                            ?.ui?.displayName ||
+                            allServices.find((s) => s.code === selectedService)
+                              ?.name ||
+                            "Selected service"}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          Select a service
+                        </span>
+                      )}
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>Select Service</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search services..."
+                          value={serviceSearch}
+                          onChange={(e) => setServiceSearch(e.target.value)}
+                          className="pl-9 h-11"
+                          disabled={creating || !selectedProvider}
+                        />
                       </div>
-                    ) : (
-                      filteredServices.map((service) => (
-                        <SelectItem
-                          key={`${service.code}-${service.country}`}
-                          value={service.code}
-                        >
-                          <div className="flex items-center gap-3 py-1">
-                            <div
-                              className={`w-6 h-6 rounded-md flex items-center justify-center text-xs ${
-                                (service as any).ui?.color || "bg-gray-200"
-                              }`}
-                            >
-                              {(service as any).ui?.logo || "📱"}
-                            </div>
-                            <span className="font-medium">
-                              {(service as any).ui?.displayName || service.name}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+
+                      {filteredServices.length === 0 ? (
+                        <div className="p-4 text-center text-sm text-muted-foreground border rounded-md">
+                          {selectedProvider
+                            ? serviceSearch
+                              ? "No services match your search"
+                              : "No services available for this provider"
+                            : "Please select a provider first"}
+                        </div>
+                      ) : (
+                        <div className="rounded-md border">
+                          {/* Virtualized list to handle thousands of items smoothly */}
+                          <List
+                            height={400}
+                            width="100%"
+                            itemCount={filteredServices.length}
+                            itemSize={52}
+                          >
+                            {renderServiceRow}
+                          </List>
+                        </div>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
 
-              {/* Country Selection */}
+              {/* Country Selection - Virtualized Dialog */}
               <div>
-                <Label
-                  htmlFor="country"
-                  className="mb-2 block text-base font-semibold"
-                >
+                <Label className="mb-2 block text-base font-semibold">
                   Country
                   {availableCountries.length > 0 && (
                     <Badge
@@ -740,45 +822,69 @@ export default function NewOrderPage() {
                     </Badge>
                   )}
                 </Label>
-                <div className="relative mb-2">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search countries..."
-                    value={countrySearch}
-                    onChange={(e) => setCountrySearch(e.target.value)}
-                    className="pl-9 h-11"
-                    disabled={creating || !selectedService}
-                  />
-                </div>
-                <Select
-                  value={selectedCountry}
-                  onValueChange={setSelectedCountry}
-                  disabled={creating || !selectedService}
+
+                <Dialog
+                  open={countryDialogOpen}
+                  onOpenChange={setCountryDialogOpen}
                 >
-                  <SelectTrigger className="h-12 text-base">
-                    <SelectValue placeholder="Select a country" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
-                    {filteredCountries.length === 0 ? (
-                      <div className="p-4 text-center text-sm text-muted-foreground">
-                        {selectedService
-                          ? "No countries available"
-                          : "Please select a service first"}
+                  <DialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-12 justify-between text-left"
+                      disabled={creating || !selectedService}
+                    >
+                      {selectedCountry ? (
+                        <span className="truncate">
+                          {availableCountries.find(
+                            (c) => c.code === selectedCountry
+                          )?.name || "Selected country"}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          Select a country
+                        </span>
+                      )}
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>Select Country</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search countries..."
+                          value={countrySearch}
+                          onChange={(e) => setCountrySearch(e.target.value)}
+                          className="pl-9 h-11"
+                          disabled={creating || !selectedService}
+                        />
                       </div>
-                    ) : (
-                      filteredCountries.map((country) => (
-                        <SelectItem key={country.code} value={country.code}>
-                          <div className="flex items-center justify-between gap-2 py-1 w-full">
-                            <span className="font-medium">{country.name}</span>
-                            <span className="font-bold text-primary">
-                              ₦{country.price.toLocaleString()}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+
+                      {filteredCountries.length === 0 ? (
+                        <div className="p-4 text-center text-sm text-muted-foreground border rounded-md">
+                          {selectedService
+                            ? "No countries available"
+                            : "Please select a service first"}
+                        </div>
+                      ) : (
+                        <div className="rounded-md border">
+                          <List
+                            height={400}
+                            width="100%"
+                            itemCount={filteredCountries.length}
+                            itemSize={52}
+                          >
+                            {renderCountryRow}
+                          </List>
+                        </div>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
 
               {/* Submit Button - Mobile */}
@@ -864,14 +970,15 @@ export default function NewOrderPage() {
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Service:</span>
                     <span className="font-semibold">
-                      {(currentService as any).ui?.displayName ||
-                        currentService.name}
+                      {currentService?.ui?.displayName || currentService.name}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Country:</span>
                     <span className="font-semibold">
-                      {currentService.country}
+                      {countryNameByCode.get(
+                        String(currentService.country).toUpperCase()
+                      ) || currentService.country}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">

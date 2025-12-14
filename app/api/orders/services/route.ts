@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/server/auth";
 import { json, error } from "@/lib/server/utils/response";
-import { getServiceLogo } from "@/lib/constants/services";
 import { PROVIDERS } from "@/lib/constants/providers";
 import {
   SMSManService,
@@ -85,10 +84,9 @@ export async function GET(req: NextRequest) {
       smsManServices.length + tvServices.length
     );
 
-    // Process SMS-Man services
+    // Process SMS-Man services (return accurate provider data, unify icon/color)
     smsManServices.forEach((service: any) => {
       const key = `${service.code}-${service.country}`;
-      const uiLogo = getServiceLogo(service.code);
 
       if (!servicesMap.has(key)) {
         servicesMap.set(key, {
@@ -97,9 +95,9 @@ export async function GET(req: NextRequest) {
           country: service.country,
           price: service.price,
           ui: {
-            logo: uiLogo.logo,
-            color: uiLogo.color,
-            displayName: uiLogo.name,
+            logo: "📱",
+            color: "bg-gray-200",
+            displayName: service.name,
           },
           providers: [
             {
@@ -121,10 +119,9 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    // Process TextVerified services
+    // Process TextVerified services (return accurate provider data, unify icon/color)
     tvServices.forEach((service: any) => {
       const key = `${service.code}-${service.country}`;
-      const uiLogo = getServiceLogo(service.code);
 
       if (!servicesMap.has(key)) {
         servicesMap.set(key, {
@@ -133,9 +130,9 @@ export async function GET(req: NextRequest) {
           country: service.country,
           price: service.price,
           ui: {
-            logo: uiLogo.logo,
-            color: uiLogo.color,
-            displayName: uiLogo.name,
+            logo: "📱",
+            color: "bg-gray-200",
+            displayName: service.name,
           },
           providers: [
             {
