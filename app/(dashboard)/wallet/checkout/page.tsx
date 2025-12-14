@@ -67,14 +67,33 @@ export default function CheckoutPage() {
     setDvaError("");
     setLoading(true);
     try {
-      const res = await api.requestPaystackDedicatedAccount();
-      const data = res?.data;
-      if (!data?.bankName || !data?.accountNumber || !data?.accountName) {
+      const res = await fetch("/api/payments/paystack/dedicated-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preferredBank: "wema-bank" }),
+      });
+      const json = await res.json();
+      const data = json?.data;
+      if ((data as any)?.status === "PENDING") {
+        setDvaError(
+          "Your dedicated account is being provisioned. We will refresh automatically once available."
+        );
+        // Try immediate GET to see if already created
+        const getRes = await fetch("/api/payments/paystack/dedicated-account", {
+          method: "GET",
+        });
+        const getJson = await getRes.json();
+        const got = getJson?.data;
+        if (got?.bankName && got?.accountNumber && got?.accountName) {
+          setDva(got);
+          setDvaError("");
+        }
+      } else if (data?.bankName && data?.accountNumber && data?.accountName) {
+        setDva(data);
+      } else {
         setDvaError(
           "Missing account details from provider. Please try again or contact support."
         );
-      } else {
-        setDva(data);
       }
     } catch (e: any) {
       const msg =

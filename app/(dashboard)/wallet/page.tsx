@@ -6,8 +6,6 @@ import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { Alert } from "@/components/ui/alert";
-import { Input } from "@/components/ui/input";
 
 export default function WalletPage() {
   const router = useRouter();
@@ -22,6 +20,7 @@ export default function WalletPage() {
   } | null>(null);
   const [dvaError, setDvaError] = useState("");
   const [dvaCooldownUntil, setDvaCooldownUntil] = useState<number>(0);
+  const [dvaProvisioning, setDvaProvisioning] = useState(false);
   const cooldownMs = 15_000; // 15 seconds
 
   useEffect(() => {
@@ -36,9 +35,9 @@ export default function WalletPage() {
       ]);
       setBalance(balanceRes.data.balance);
       setTransactions(transactionsRes.data);
-      // Try fetch or request dedicated account silently if available
+
+      // Try fetch existing DVA without creating
       try {
-        // Use lightweight GET to fetch existing DVA without creating
         const res = await fetch("/api/payments/paystack/dedicated-account", {
           method: "GET",
         });
@@ -46,6 +45,9 @@ export default function WalletPage() {
         const data = json?.data;
         if (data?.bankName && data?.accountNumber && data?.accountName) {
           setDva(data);
+          setDvaProvisioning(false);
+        } else if (json?.data?.status === "PENDING") {
+          setDvaProvisioning(true);
         }
       } catch (e: any) {
         const msg =
@@ -67,7 +69,6 @@ export default function WalletPage() {
   };
 
   const handleDeposit = () => {
-    // Navigate to checkout page
     router.push("/wallet/checkout");
   };
 
@@ -92,11 +93,7 @@ export default function WalletPage() {
           </p>
         </Card>
 
-        {error && (
-          <Alert variant="destructive" className="text-sm md:text-base">
-            {error}
-          </Alert>
-        )}
+        {error && <p className="text-sm md:text-base text-red-800">{error}</p>}
 
         {/* Fund Wallet */}
         <Card className="p-4 md:p-6">
@@ -131,11 +128,9 @@ export default function WalletPage() {
             Your Dedicated Account
           </h2>
           {dvaError && (
-            <Alert variant="destructive" className="text-sm md:text-base">
-              {dvaError}
-            </Alert>
+            <p className="text-sm md:text-base text-red-800">{dvaError}</p>
           )}
-          {!dva && !dvaError && (
+          {!dva && !dvaError && !dvaProvisioning && (
             <p className="text-sm md:text-base text-muted-foreground">
               No dedicated account yet. Generate one from the checkout page or
               here.
@@ -174,6 +169,12 @@ export default function WalletPage() {
               </div>
             </div>
           )}
+          {dvaProvisioning && (
+            <p className="text-sm md:text-base text-green-600">
+              Your dedicated account is being provisioned. This can take a few
+              minutes. We will refresh details automatically.
+            </p>
+          )}
           <div className="flex gap-2">
             <Button
               variant="secondary"
@@ -190,7 +191,6 @@ export default function WalletPage() {
                 }
                 setDvaCooldownUntil(now + cooldownMs);
                 try {
-                  // Generate (or reassign) via POST only when user requests
                   const res = await fetch(
                     "/api/payments/paystack/dedicated-account",
                     {
@@ -208,17 +208,43 @@ export default function WalletPage() {
                     );
                   }
                   const data = json?.data;
-                  if (
-                    !data?.bankName ||
-                    !data?.accountNumber ||
-                    !data?.accountName
-                  ) {
-                    setDvaError(
-                      "Missing account details from provider. Please try again or contact support."
-                    );
-                    return;
+                  if ((data as any)?.status === "PENDING") {
+                    setDvaProvisioning(true);
+                    // Begin polling GET every 20s until details exist
+                    const interval = setInterval(async () => {
+                      try {
+                        const getRes = await fetch(
+                          "/api/payments/paystack/dedicated-account",
+                          {
+                            method: "GET",
+                          }
+                        );
+                        const getJson = await getRes.json();
+                        const got = getJson?.data;
+                        if (
+                          got?.bankName &&
+                          got?.accountNumber &&
+                          got?.accountName
+                        ) {
+                          setDva(got);
+                          setDvaProvisioning(false);
+                          clearInterval(interval);
+                        }
+                      } catch {}
+                    }, 20000);
+                  } else {
+                    if (
+                      !data?.bankName ||
+                      !data?.accountNumber ||
+                      !data?.accountName
+                    ) {
+                      setDvaError(
+                        "Missing account details from provider. Please try again or contact support."
+                      );
+                      return;
+                    }
+                    setDva(data);
                   }
-                  setDva(data);
                 } catch (e: any) {
                   const msg =
                     e?.response?.data?.error?.message ||
@@ -233,7 +259,6 @@ export default function WalletPage() {
                     setDvaError(msg);
                   }
                 } finally {
-                  // Clear cooldown after delay to allow another attempt
                   setTimeout(() => setDvaCooldownUntil(0), cooldownMs);
                 }
               }}
