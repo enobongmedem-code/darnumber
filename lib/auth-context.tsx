@@ -1,16 +1,15 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import api from "@/lib/api";
+import { SessionProvider, signIn, signOut, useSession } from "next-auth/react";
 
-interface User {
+type User = {
   id: string;
   email: string;
-  userName: string;
-  role: string;
-  balance: number;
-}
+  name?: string | null;
+  role?: string | null;
+};
 
 interface AuthContextType {
   user: User | null;
@@ -29,84 +28,62 @@ const publicRoutes = [
   "/reset-password",
 ];
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+function InnerAuthProvider({ children }: { children: React.ReactNode }) {
+  const { data, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
 
-  useEffect(() => {
-    checkAuth();
-  }, [pathname]);
+  const user = (
+    data?.user
+      ? {
+          id: data.user.id,
+          email: data.user.email!,
+          name: data.user.name ?? null,
+          role: (data.user as any).role ?? null,
+        }
+      : null
+  ) as User | null;
 
-  const checkAuth = async () => {
-    const token = localStorage.getItem("token");
+  const loading = status === "loading";
 
-    if (!token) {
-      setLoading(false);
-      if (!publicRoutes.includes(pathname)) {
+  // Simple redirect logic: if not authed and route is protected, go to login
+  if (!loading) {
+    const isPublic = publicRoutes.includes(pathname);
+    if (!user && !isPublic) router.push("/login");
+    if (user && isPublic) router.push("/dashboard");
+  }
+
+  const value = useMemo<AuthContextType>(
+    () => ({
+      user,
+      loading,
+      login: async (email: string, password: string) => {
+        const res = await signIn("credentials", {
+          email,
+          password,
+          redirect: false,
+        });
+        if (!res || res.error) throw new Error(res?.error || "Login failed");
+      },
+      logout: async () => {
+        await signOut({ redirect: false });
         router.push("/login");
-      }
-      return;
-    }
+      },
+      refreshUser: async () => {
+        // No-op with JWT session; could revalidate user endpoints here
+      },
+    }),
+    [user, loading, router]
+  );
 
-    try {
-      const response = await api.getProfile();
-      setUser(response.data);
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
 
-      // Redirect to dashboard if on public route
-      if (publicRoutes.includes(pathname)) {
-        router.push("/dashboard");
-      }
-    } catch (error) {
-      console.error("Auth check failed:", error);
-      localStorage.removeItem("token");
-      localStorage.removeItem("refreshToken");
-      setUser(null);
-
-      if (!publicRoutes.includes(pathname)) {
-        router.push("/login");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const login = async (email: string, password: string) => {
-    const response = await api.login(email, password);
-    if (response.success) {
-      await checkAuth();
-    } else {
-      throw new Error(response.error || "Login failed");
-    }
-  };
-
-  const logout = async () => {
-    try {
-      await api.logout();
-    } catch (error) {
-      console.error("Logout error:", error);
-    } finally {
-      localStorage.removeItem("token");
-      localStorage.removeItem("refreshToken");
-      setUser(null);
-      router.push("/login");
-    }
-  };
-
-  const refreshUser = async () => {
-    try {
-      const response = await api.getProfile();
-      setUser(response.data);
-    } catch (error) {
-      console.error("Failed to refresh user:", error);
-    }
-  };
-
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
-      {children}
-    </AuthContext.Provider>
+    <SessionProvider>
+      <InnerAuthProvider>{children}</InnerAuthProvider>
+    </SessionProvider>
   );
 }
 

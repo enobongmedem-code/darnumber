@@ -4,8 +4,7 @@
 
 import axios, { AxiosError, AxiosInstance } from "axios";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
+const API_BASE_URL = "/api";
 
 class ApiClient {
   private client: AxiosInstance;
@@ -36,16 +35,8 @@ class ApiClient {
       (response) => response,
       async (error: AxiosError<any>) => {
         if (error.response?.status === 401) {
-          // Try to refresh token
-          const refreshed = await this.refreshToken();
-          if (refreshed && error.config) {
-            return this.client.request(error.config);
-          }
-          // Redirect to login
           this.clearAuth();
-          if (typeof window !== "undefined") {
-            window.location.href = "/login";
-          }
+          if (typeof window !== "undefined") window.location.href = "/login";
         }
         return Promise.reject(error);
       }
@@ -76,25 +67,7 @@ class ApiClient {
   }
 
   private async refreshToken(): Promise<boolean> {
-    try {
-      const refreshToken = this.getRefreshToken();
-      if (!refreshToken) return false;
-
-      const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-        refreshToken,
-      });
-
-      if (response.data.success) {
-        this.setTokens(
-          response.data.data.accessToken,
-          response.data.data.refreshToken
-        );
-        return true;
-      }
-      return false;
-    } catch (error) {
-      return false;
-    }
+    return false;
   }
 
   // ============================================
@@ -151,6 +124,15 @@ class ApiClient {
   async requestPasswordReset(email: string) {
     const response = await this.client.post("/auth/password-reset/request", {
       email,
+    });
+    return response.data;
+  }
+
+  // Shims for components referencing legacy names
+  async resetPassword(token: string, newPassword: string) {
+    const response = await this.client.post("/auth/password/reset", {
+      token,
+      newPassword,
     });
     return response.data;
   }
@@ -273,15 +255,6 @@ class ApiClient {
     return response.data;
   }
 
-  // Legacy Stripe methods (kept for backwards compatibility)
-  async createPaymentIntent(amount: number, currency: string = "USD") {
-    const response = await this.client.post("/payments/deposit", {
-      amount,
-      currency,
-    });
-    return response.data;
-  }
-
   async requestWithdrawal(amount: number, bankDetails: any) {
     const response = await this.client.post("/payments/withdraw", {
       amount,
@@ -308,6 +281,11 @@ class ApiClient {
     return response.data;
   }
 
+  // Legacy alias used in admin page
+  async getAdminDashboard() {
+    return this.getDashboard();
+  }
+
   async getUsers(params?: {
     search?: string;
     status?: string;
@@ -316,6 +294,11 @@ class ApiClient {
   }) {
     const response = await this.client.get("/admin/users", { params });
     return response.data;
+  }
+
+  // Legacy alias used in admin users page
+  async getAdminUsers(page?: number, limit?: number, search?: string) {
+    return this.getUsers({ page, limit, search });
   }
 
   async getUserDetails(userId: string) {
@@ -334,6 +317,11 @@ class ApiClient {
       { amount, reason }
     );
     return response.data;
+  }
+
+  // Legacy alias used in admin users page
+  async adjustUserBalance(userId: string, amount: number, reason: string) {
+    return this.adjustBalance(userId, amount, reason);
   }
 
   async getAdminOrders(params?: any) {

@@ -20,6 +20,33 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Backend → Next.js API
+
+The backend has been migrated to Next.js App Router APIs and NextAuth.
+
+- Auth: NextAuth Credentials at `/api/auth/[...nextauth]`
+- Signup: `POST /api/auth/signup`
+- Profile: `GET /api/user/profile`
+
+Setup:
+
+```bash
+pnpm add next-auth @prisma/client prisma bcryptjs
+pnpm prisma generate
+```
+
+Env (copy `.env.example` to `.env.local`):
+
+```bash
+NEXTAUTH_SECRET=your-strong-secret
+DATABASE_URL=postgresql://user:password@localhost:5432/darnumber?schema=public
+```
+
+Notes:
+
+- `AuthProvider` now uses NextAuth session; login page uses `signIn('credentials')`.
+- Prisma client is generated into `app/generated/prisma` and imported from `@/app/generated/prisma/client`.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

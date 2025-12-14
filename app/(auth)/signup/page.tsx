@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import api from "@/lib/api";
+import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,24 +45,27 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const response = await api.register({
-        email: formData.email,
-        password: formData.password,
-        userName: formData.userName,
-        phone: formData.phone || undefined,
-        country: formData.country || undefined,
-        referralCode: formData.referralCode || undefined,
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          userName: formData.userName,
+          phone: formData.phone || undefined,
+          country: formData.country || undefined,
+          referralCode: formData.referralCode || undefined,
+          name: formData.userName,
+        }),
       });
-
-      if (response.success) {
-        router.push("/login?registered=true");
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        setError(data?.error?.message || "Registration failed");
       } else {
-        setError(response.error || "Registration failed");
+        router.push("/login?registered=true");
       }
     } catch (err: any) {
-      setError(
-        err.response?.data?.error || "Registration failed. Please try again."
-      );
+      setError("Registration failed. Please try again.");
     } finally {
       setLoading(false);
     }

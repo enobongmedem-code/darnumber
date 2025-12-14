@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import api from "@/lib/api";
+import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,14 +23,18 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await api.login(email, password);
-      if (response.success) {
-        router.push("/dashboard");
+      const res = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+      if (res?.error) {
+        setError(res.error || "Login failed");
       } else {
-        setError(response.error || "Login failed");
+        router.push("/dashboard");
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || "Login failed. Please try again.");
+      setError("Login failed. Please try again.");
     } finally {
       setLoading(false);
     }

@@ -124,13 +124,8 @@ export default function DashboardLayout({
 
         <div className="p-4 border-t">
           <div className="mb-3 p-3 bg-gray-50 rounded-lg">
-            <p className="text-sm font-medium">{user?.userName}</p>
+            <p className="text-sm font-medium">{user?.name || user?.email}</p>
             <p className="text-xs text-muted-foreground">{user?.email}</p>
-            {user?.balance !== undefined && (
-              <p className="text-sm font-bold text-blue-600 mt-1">
-                ${user.balance.toFixed(2)}
-              </p>
-            )}
           </div>
           <Button variant="outline" className="w-full" onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-2" />
