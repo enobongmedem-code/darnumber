@@ -1,5 +1,172 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import api from "@/lib/api";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert } from "@/components/ui/alert";
+
+type Provider = "etegram" | "paystack" | "flutterwave";
+
+export default function CheckoutPage() {
+  const router = useRouter();
+  const [amount, setAmount] = useState<string>("");
+  const [provider, setProvider] = useState<Provider>("etegram");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>("");
+  const [dva, setDva] = useState<{
+    bankName: string;
+    accountNumber: string;
+    accountName: string;
+  } | null>(null);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    const amt = Math.round(Number(amount));
+    if (!amt || amt < 100) {
+      setError("Enter a valid amount (min ₦100)");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api.initializePayment(amt, provider);
+      const url =
+        res?.data?.authorizationUrl ||
+        res?.data?.authorization_url ||
+        res?.data?.link;
+      const reference = res?.data?.reference;
+      if (!url) throw new Error("Failed to get payment link");
+      // For Etegram we rely on webhook; still redirect to the provided authorization URL
+      window.location.href = url;
+      // Optional: keep reference in URL to support manual verify if needed
+      if (provider !== "etegram" && reference) {
+        router.push(
+          `/wallet/verify?ref=${encodeURIComponent(
+            reference
+          )}&provider=${provider}`
+        );
+      }
+    } catch (e: any) {
+      setError(
+        e?.response?.data?.error?.message ||
+          e?.message ||
+          "Failed to initialize payment"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const requestDedicatedAccount = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const res = await api.requestPaystackDedicatedAccount();
+      setDva(res?.data);
+    } catch (e: any) {
+      setError(
+        e?.response?.data?.error?.message ||
+          e?.message ||
+          "Failed to request dedicated account"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto p-6 max-w-2xl">
+      <h1 className="text-2xl font-bold mb-6">Fund Wallet</h1>
+
+      {error && <Alert variant="destructive">{error}</Alert>}
+
+      <Card className="p-6 space-y-6">
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="amount">Amount (NGN)</Label>
+            <Input
+              id="amount"
+              type="number"
+              min="100"
+              step="1"
+              placeholder="Minimum ₦100"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              required
+              disabled={loading}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Payment Provider</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {(
+                [
+                  { key: "etegram", label: "Etegram (Default)" },
+                  { key: "paystack", label: "Paystack" },
+                  { key: "flutterwave", label: "Flutterwave" },
+                ] as { key: Provider; label: string }[]
+              ).map((p) => (
+                <button
+                  type="button"
+                  key={p.key}
+                  onClick={() => setProvider(p.key)}
+                  className={`border rounded-lg p-3 text-left hover:bg-muted ${
+                    provider === p.key ? "ring-2 ring-primary" : ""
+                  }`}
+                  disabled={loading}
+                >
+                  <div className="font-medium">{p.label}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {p.key === "etegram" &&
+                      "Bank transfer checkout (webhook confirmed)"}
+                    {p.key === "paystack" && "Cards, Bank Transfer, USSD"}
+                    {p.key === "flutterwave" && "Cards, Bank, Mobile Money"}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Processing..." : "Proceed to Payment"}
+          </Button>
+        </form>
+      </Card>
+
+      <Card className="p-6 mt-6 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold">Optional: Dedicated Bank Account</h2>
+            <p className="text-sm text-muted-foreground">
+              Request a personal virtual account (Paystack) for easy top-ups.
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            onClick={requestDedicatedAccount}
+            disabled={loading}
+          >
+            {loading ? "Requesting..." : "Request Account"}
+          </Button>
+        </div>
+        {dva && (
+          <div className="border rounded-lg p-4 text-sm">
+            <div className="font-medium">{dva.bankName}</div>
+            <div>Account Name: {dva.accountName}</div>
+            <div>Account Number: {dva.accountNumber}</div>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+("use client");
+
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";

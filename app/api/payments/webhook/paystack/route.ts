@@ -1,18 +1,19 @@
-import { NextRequest } from 'next/server'
-import { json, error } from '@/lib/server/utils/response'
-import { PaymentService } from '@/lib/server/services/payment.service'
+import { NextRequest } from "next/server";
+import { json, error } from "@/lib/server/utils/response";
+import { PaymentService } from "@/lib/server/services/payment.service";
 
-export const runtime = 'nodejs'
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    const raw = await req.text()
-    const signature = req.headers.get('x-paystack-signature')
-    const svc = new PaymentService()
-    const result = await svc.handlePaystackWebhook(raw, signature)
-    if (!result.ok) return new Response('unauthorized', { status: result.status || 401 })
-    return json({ ok: true })
+    const raw = await req.text();
+    const signature = req.headers.get("x-paystack-signature");
+    const svc = new PaymentService();
+    const result = await svc.handlePaystackWebhook(raw, signature);
+    if (!result.ok)
+      return new Response("unauthorized", { status: result.status || 401 });
+    return json({ ok: true });
   } catch {
-    return error('Invalid payload', 400)
+    return error("Invalid payload", 400);
   }
 }
