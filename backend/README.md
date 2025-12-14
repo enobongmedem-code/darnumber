@@ -252,16 +252,16 @@ npm run test:watch
 2. Setup environment variables
 3. Deploy: `eb deploy`
 
-### Docker
+### Node + PM2
 
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY . .
-RUN npm run build
-CMD ["npm", "start"]
+Deploy using a Node.js runtime and a process manager like PM2:
+
+```bash
+npm ci --only=production
+npm run build
+pm2 start dist/app.js --name sms-service-backend
+pm2 save
+pm2 startup
 ```
 
 ### Environment Setup

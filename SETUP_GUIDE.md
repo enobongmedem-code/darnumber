@@ -137,26 +137,7 @@ UPDATE "User" SET role = 'ADMIN' WHERE email = 'your@email.com';
 
 ## Production Deployment
 
-### Option 1: Docker Compose (Recommended)
-
-```bash
-# 1. Set production environment variables
-cp backend/.env.example backend/.env
-cp .env.example .env.local
-
-# Edit files with production values
-
-# 2. Build and start containers
-docker-compose up -d
-
-# 3. Run migrations
-docker-compose exec backend pnpm prisma migrate deploy
-
-# 4. Check logs
-docker-compose logs -f
-```
-
-### Option 2: Manual Deployment
+### Manual Deployment
 
 #### Backend (AWS EC2 / Render / Railway)
 
@@ -279,8 +260,8 @@ tail -f backend/logs/combined.log
 # View error logs
 tail -f backend/logs/error.log
 
-# Docker logs
-docker-compose logs -f backend
+# Process manager logs (e.g., PM2)
+pm2 logs
 ```
 
 ### Metrics Dashboard
