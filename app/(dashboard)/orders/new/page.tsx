@@ -68,6 +68,8 @@ export default function NewOrderPage() {
 
   const fetchData = async () => {
     try {
+      console.log("[NewOrderPage] Starting fetchData...");
+
       const [servicesRes, balanceRes] = await Promise.all([
         api.getAvailableServices(),
         api.getBalance(),
@@ -77,19 +79,27 @@ export default function NewOrderPage() {
       console.group("[NewOrderPage] fetchData");
       console.log("raw servicesRes:", servicesRes);
       console.log("raw balanceRes:", balanceRes);
+      console.log("servicesRes.ok:", servicesRes?.ok);
+      console.log("servicesRes.data:", servicesRes?.data);
 
       const services: Service[] = servicesRes?.data?.services || [];
       const providersFromApi: Provider[] = servicesRes?.data?.providers || [];
 
       console.log("services count:", services.length);
-      console.log(
-        "providersFromApi count:",
-        providersFromApi ? providersFromApi.length : 0
-      );
+      console.log("services sample:", services.slice(0, 3));
+      console.log("providersFromApi count:", providersFromApi.length);
+      console.log("providersFromApi:", providersFromApi);
 
       // Fallback: derive providers from services when API doesn't return providers array
       const derivedProvidersMap = new Map<string, Provider>();
       services.forEach((s) => {
+        console.log(
+          "Processing service:",
+          s.code,
+          s.name,
+          "providers:",
+          s.providers
+        );
         s.providers?.forEach((p) => {
           if (p?.id && !derivedProvidersMap.has(p.id)) {
             derivedProvidersMap.set(p.id, {
@@ -104,66 +114,49 @@ export default function NewOrderPage() {
 
       const derivedProviders = Array.from(derivedProvidersMap.values());
       console.log("derivedProviders count:", derivedProviders.length);
+      console.log("derivedProviders:", derivedProviders);
 
       setAllServices(services);
+      console.log("Set allServices with", services.length, "services");
 
-      // Hardcoded providers (Lion & Panda) with canonical names
-      const HARDCODED_PROVIDERS: Provider[] = [
-        {
-          id: "lion",
-          name: "sms-man",
-          displayName: "Lion",
-          cover: "All Countries",
-        },
-        {
-          id: "panda",
-          name: "textverified",
-          displayName: "Panda",
-          cover: "United States",
-        },
-      ];
-
-      // Try to find corresponding providers from API/derived by name
-      const resolveProvider = (canonical: Provider) => {
-        const match = (list: Provider[]) =>
-          list.find((p) =>
-            p.name?.toLowerCase().includes(canonical.name.toLowerCase())
-          );
-        return (
-          match(providersFromApi || []) || match(derivedProviders) || canonical
-        );
-      };
-
-      const resolvedProviders =
-        providersFromApi && providersFromApi.length > 0
+      // Use providers from API directly (they're now hardcoded in the backend)
+      const finalProviders =
+        providersFromApi.length > 0
           ? providersFromApi
-          : HARDCODED_PROVIDERS.map(resolveProvider);
-      // Ensure uniqueness by displayName (or id) to avoid duplicates
-      const uniqueByKey = new Map<string, Provider>();
-      resolvedProviders.forEach((p) => {
-        const key = (p.displayName || p.name || p.id).toLowerCase();
-        if (!uniqueByKey.has(key)) uniqueByKey.set(key, p);
-      });
+          : [
+              {
+                id: "lion",
+                name: "sms-man",
+                displayName: "Lion SMS",
+                cover: "All Countries",
+              },
+              {
+                id: "panda",
+                name: "textverified",
+                displayName: "Panda Verify",
+                cover: "United States",
+              },
+            ];
 
-      setProviders(Array.from(uniqueByKey.values()));
+      console.log("finalProviders:", finalProviders);
+      setProviders(finalProviders);
       setBalance(balanceRes.data.balance);
       console.log("balance:", balanceRes.data.balance);
 
       // Set default provider if available
-      const initialProviders = Array.from(uniqueByKey.values());
-      if (initialProviders.length > 0) {
-        setSelectedProvider(initialProviders[0].id || "lion");
+      if (finalProviders.length > 0) {
+        setSelectedProvider(finalProviders[0].id || "lion");
         console.log(
           "selected default provider:",
-          initialProviders[0].id,
-          initialProviders[0]
+          finalProviders[0].id,
+          finalProviders[0]
         );
       } else {
-        console.warn("No providers available from API or derived sources.");
+        console.warn("No providers available!");
       }
       console.groupEnd();
     } catch (error) {
-      console.error("Failed to fetch data:", error);
+      console.error("[NewOrderPage] Failed to fetch data:", error);
       setError("Failed to load services");
     } finally {
       setLoading(false);
@@ -172,19 +165,38 @@ export default function NewOrderPage() {
 
   // Get unique service codes for the selected provider
   const availableServices = useMemo(() => {
-    if (!selectedProvider) return [];
+    console.log("[availableServices] Computing...", {
+      selectedProvider,
+      allServicesCount: allServices.length,
+    });
+
+    if (!selectedProvider) {
+      console.log("[availableServices] No provider selected");
+      return [];
+    }
 
     const serviceMap = new Map<string, Service>();
 
     allServices.forEach((service) => {
-      if (service.providers.some((p) => p.id === selectedProvider)) {
+      const hasProvider = service.providers.some(
+        (p) => p.id === selectedProvider
+      );
+      console.log(`[availableServices] Service ${service.code}:`, {
+        providers: service.providers.map((p) => p.id),
+        hasProvider,
+        selectedProvider,
+      });
+
+      if (hasProvider) {
         if (!serviceMap.has(service.code)) {
           serviceMap.set(service.code, service);
         }
       }
     });
 
-    return Array.from(serviceMap.values());
+    const result = Array.from(serviceMap.values());
+    console.log("[availableServices] Result:", result.length, "services");
+    return result;
   }, [allServices, selectedProvider]);
 
   // Get available countries for selected service and provider
@@ -669,22 +681,30 @@ export default function NewOrderPage() {
                 </div>
                 <Select
                   value={selectedService}
-                  onValueChange={setSelectedService}
+                  onValueChange={(value) => {
+                    console.log("[NewOrderPage] Service selected:", value);
+                    setSelectedService(value);
+                  }}
                   disabled={creating || !selectedProvider}
                 >
-                  <SelectTrigger className="h-12 text-base">
+                  <SelectTrigger className="h-12 text-base" id="service">
                     <SelectValue placeholder="Select a service" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px]">
                     {filteredServices.length === 0 ? (
                       <div className="p-4 text-center text-sm text-muted-foreground">
                         {selectedProvider
-                          ? "No services found"
+                          ? serviceSearch
+                            ? "No services match your search"
+                            : "No services available for this provider"
                           : "Please select a provider first"}
                       </div>
                     ) : (
                       filteredServices.map((service) => (
-                        <SelectItem key={service.code} value={service.code}>
+                        <SelectItem
+                          key={`${service.code}-${service.country}`}
+                          value={service.code}
+                        >
                           <div className="flex items-center gap-3 py-1">
                             <div
                               className={`w-6 h-6 rounded-md flex items-center justify-center text-xs ${

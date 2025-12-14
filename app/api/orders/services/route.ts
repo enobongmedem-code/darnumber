@@ -1,9 +1,12 @@
 import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/server/auth";
 import { json, error } from "@/lib/server/utils/response";
-import { prisma } from "@/lib/server/prisma";
 import { getServiceLogo } from "@/lib/constants/services";
 import { PROVIDERS } from "@/lib/constants/providers";
+import {
+  SMSManService,
+  TextVerifiedService,
+} from "@/lib/server/services/order.service";
 
 export const runtime = "nodejs";
 
@@ -17,184 +20,146 @@ export async function GET(req: NextRequest) {
       email: authResult?.email,
     });
 
-    console.log(
-      "3. Fetching all active services with providers and pricing..."
-    );
+    console.log("3. Using hardcoded providers from constants...");
 
-    // Get all active providers
-    const providers = await prisma.provider.findMany({
-      where: {
-        isActive: true,
-        healthStatus: "HEALTHY",
+    // Hardcoded providers
+    const providers = [
+      {
+        id: PROVIDERS.LION.id,
+        name: "sms-man",
+        displayName: PROVIDERS.LION.displayName,
+        logo: PROVIDERS.LION.logo,
+        cover: "All Countries",
       },
-      select: {
-        id: true,
-        name: true,
-        displayName: true,
-        priority: true,
+      {
+        id: PROVIDERS.PANDA.id,
+        name: "textverified",
+        displayName: PROVIDERS.PANDA.displayName,
+        logo: PROVIDERS.PANDA.logo,
+        cover: "United States",
       },
-      orderBy: {
-        priority: "desc",
-      },
-    });
+    ];
 
-    console.log("4. Found providers:", providers);
+    console.log("4. Providers:", providers);
 
-    // Get all active services with pricing
-    const services = await prisma.service.findMany({
-      where: {
-        isActive: true,
-        available: true,
-        provider: {
-          isActive: true,
-          healthStatus: "HEALTHY",
-        },
-      },
-      include: {
-        provider: {
-          select: {
-            id: true,
-            name: true,
-            displayName: true,
-          },
-        },
-      },
-    });
+    console.log("5. Fetching services from provider APIs...");
 
-    console.log("5. Found services count:", services.length);
-
-    // Get pricing for all services
-    const providerPrices = await prisma.providerPrice.findMany({
-      where: {
-        providerId: {
-          in: providers.map((p) => p.id),
-        },
-      },
-    });
-
-    console.log("6. Found pricing entries:", providerPrices.length);
-
-    // Get pricing rules for profit calculation
-    const pricingRules = await prisma.pricingRule.findMany({
-      where: {
-        isActive: true,
-      },
-      orderBy: {
-        priority: "desc",
-      },
-    });
-
-    console.log("7. Found pricing rules:", pricingRules.length);
-
-    // Helper function to calculate final price
-    const calculatePrice = (
-      serviceCode: string,
-      country: string,
-      baseCost: number
-    ) => {
-      const rule = pricingRules.find(
-        (r) =>
-          (r.serviceCode === serviceCode && r.country === country) ||
-          (r.serviceCode === serviceCode && !r.country) ||
-          (!r.serviceCode && r.country === country) ||
-          (!r.serviceCode && !r.country)
-      );
-
-      let profit = 0;
-      if (rule) {
-        if (rule.profitType === "PERCENTAGE") {
-          profit = baseCost * (Number(rule.profitValue) / 100);
-        } else {
-          profit = Number(rule.profitValue);
-        }
-      }
-      return baseCost + profit;
-    };
-
-    // Group services by serviceCode and country
+    // Fetch services from each provider's API
     const servicesMap = new Map<string, any>();
 
-    for (const service of services) {
-      const key = `${service.serviceCode}-${service.country}`;
+    // Fetch from SMS-Man
+    let smsManServices: any[] = [];
+    try {
+      console.log("5a. Fetching SMS-Man services...");
+      const smsManService = new SMSManService();
+      smsManServices = await smsManService.getAvailableServices();
+      console.log("5b. SMS-Man services count:", smsManServices.length);
+    } catch (err) {
+      console.error("5c. Error fetching SMS-Man services:", err);
+      smsManServices = [];
+    }
+
+    // Fetch from TextVerified
+    let tvServices: any[] = [];
+    try {
+      console.log("5d. Fetching TextVerified services...");
+      const textVerifiedService = new TextVerifiedService();
+      tvServices = await textVerifiedService.getAvailableServices();
+      console.log("5e. TextVerified services count:", tvServices.length);
+    } catch (err) {
+      console.error("5f. Error fetching TextVerified services:", err);
+      tvServices = [];
+    }
+
+    // Check if we have any services at all
+    if (smsManServices.length === 0 && tvServices.length === 0) {
+      console.error("6. No services available from any provider");
+      return error(
+        "No services available from providers. Please check API keys and try again.",
+        503
+      );
+    }
+
+    console.log(
+      "6. Total services count:",
+      smsManServices.length + tvServices.length
+    );
+
+    // Process SMS-Man services
+    smsManServices.forEach((service: any) => {
+      const key = `${service.code}-${service.country}`;
+      const uiLogo = getServiceLogo(service.code);
 
       if (!servicesMap.has(key)) {
-        // Find pricing
-        const pricing = providerPrices.find(
-          (p) =>
-            p.providerId === service.providerId &&
-            p.serviceCode === service.serviceCode &&
-            p.country === service.country
-        );
-
-        if (pricing) {
-          const finalPrice = calculatePrice(
-            service.serviceCode,
-            service.country,
-            Number(pricing.baseCost)
-          );
-
-          const uiLogo = getServiceLogo(service.serviceCode);
-          servicesMap.set(key, {
-            code: service.serviceCode,
-            name: service.serviceName,
-            country: service.country,
-            price: finalPrice,
-            ui: {
-              logo: uiLogo.logo,
-              color: uiLogo.color,
-              displayName: uiLogo.name,
+        servicesMap.set(key, {
+          code: service.code,
+          name: service.name,
+          country: service.country,
+          price: service.price,
+          ui: {
+            logo: uiLogo.logo,
+            color: uiLogo.color,
+            displayName: uiLogo.name,
+          },
+          providers: [
+            {
+              id: PROVIDERS.LION.id,
+              name: "sms-man",
+              displayName: PROVIDERS.LION.displayName,
             },
-            providers: [
-              {
-                id: service.provider.id,
-                name: service.provider.name,
-                displayName: service.provider.displayName,
-              },
-            ],
-          });
-        }
+          ],
+        });
       } else {
-        // Add provider to existing service
         const existing = servicesMap.get(key);
-        if (
-          !existing.providers.find((p: any) => p.id === service.provider.id)
-        ) {
+        if (!existing.providers.find((p: any) => p.id === PROVIDERS.LION.id)) {
           existing.providers.push({
-            id: service.provider.id,
-            name: service.provider.name,
-            displayName: service.provider.displayName,
+            id: PROVIDERS.LION.id,
+            name: "sms-man",
+            displayName: PROVIDERS.LION.displayName,
           });
         }
       }
-    }
+    });
+
+    // Process TextVerified services
+    tvServices.forEach((service: any) => {
+      const key = `${service.code}-${service.country}`;
+      const uiLogo = getServiceLogo(service.code);
+
+      if (!servicesMap.has(key)) {
+        servicesMap.set(key, {
+          code: service.code,
+          name: service.name,
+          country: service.country,
+          price: service.price,
+          ui: {
+            logo: uiLogo.logo,
+            color: uiLogo.color,
+            displayName: uiLogo.name,
+          },
+          providers: [
+            {
+              id: PROVIDERS.PANDA.id,
+              name: "textverified",
+              displayName: PROVIDERS.PANDA.displayName,
+            },
+          ],
+        });
+      } else {
+        const existing = servicesMap.get(key);
+        if (!existing.providers.find((p: any) => p.id === PROVIDERS.PANDA.id)) {
+          existing.providers.push({
+            id: PROVIDERS.PANDA.id,
+            name: "textverified",
+            displayName: PROVIDERS.PANDA.displayName,
+          });
+        }
+      }
+    });
 
     const result = {
       services: Array.from(servicesMap.values()),
-      providers: providers.map((p) => {
-        // Try to enrich provider with logo and coverage info from constants
-        const provName = (p.name || p.displayName || "").toLowerCase();
-        const isLion =
-          provName.includes("lion") || provName.includes("sms-man");
-        const isPanda =
-          provName.includes("panda") || provName.includes("textverified");
-        const logo = isLion
-          ? PROVIDERS.LION.logo
-          : isPanda
-          ? PROVIDERS.PANDA.logo
-          : "☎️";
-        const cover = isLion
-          ? "All Countries"
-          : isPanda
-          ? "United States"
-          : "Varies";
-        return {
-          id: p.id,
-          name: p.name,
-          displayName: p.displayName,
-          logo,
-          cover,
-        };
-      }),
+      providers,
     };
 
     console.log("8. ✅ Returning services:", {
