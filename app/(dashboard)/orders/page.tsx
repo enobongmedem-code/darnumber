@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
-
+import { Frown } from "lucide-react";
 export default function OrdersPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -65,7 +65,7 @@ export default function OrdersPage() {
           <h1 className="text-2xl md:text-3xl font-bold">My Orders</h1>
           <Button
             onClick={() => router.push("/orders/new")}
-            className="w-full sm:w-auto"
+            className="w-full sm:w-auto "
           >
             Buy Number
           </Button>
@@ -73,15 +73,22 @@ export default function OrdersPage() {
 
         {orders.length === 0 ? (
           <Card className="p-8 md:p-12 text-center">
+            <Frown
+              className="mx-auto mb-2 text-muted-foreground"
+              size={48}
+            ></Frown>
+
             <p className="text-muted-foreground mb-4 text-sm md:text-base">
               No orders yet
             </p>
-            <Button
-              onClick={() => router.push("/orders/new")}
-              className="w-full sm:w-auto"
-            >
-              Buy Your First Number
-            </Button>
+            <div className="flex justify-center">
+              <Button
+                onClick={() => router.push("/orders/new")}
+                className="w-50 sm:w-auto "
+              >
+                Buy Your First Number
+              </Button>
+            </div>
           </Card>
         ) : (
           <>

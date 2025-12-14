@@ -154,7 +154,11 @@ class ApiClient {
     const response = await this.client.get("/orders", {
       params: { page, limit },
     });
-    return response.data;
+    // Backend returns {ok: true, data: {orders: [], pagination: {}}}
+    return {
+      data: response.data.data?.orders || [],
+      pagination: response.data.data?.pagination || {},
+    };
   }
 
   async getOrder(orderId: string) {
@@ -193,7 +197,7 @@ class ApiClient {
   }
 
   async getBalance() {
-    const response = await this.client.get("/users/balance");
+    const response = await this.client.get("/user/balance");
     return response.data;
   }
 
