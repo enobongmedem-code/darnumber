@@ -8,6 +8,16 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function OrderDetailPage() {
   const router = useRouter();
@@ -19,6 +29,17 @@ export default function OrderDetailPage() {
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [now, setNow] = useState<number>(Date.now());
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+
+  // Memoized values (must be before conditional logic)
+  const expiresAtMs = useMemo(() => {
+    return order?.expiresAt ? new Date(order.expiresAt).getTime() : null;
+  }, [order?.expiresAt]);
+
+  const remainingMs = useMemo(() => {
+    if (!expiresAtMs) return null;
+    return Math.max(0, expiresAtMs - now);
+  }, [expiresAtMs, now]);
 
   // Tick every second to update countdown
   useEffect(() => {
@@ -27,17 +48,22 @@ export default function OrderDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (orderId) {
-      fetchOrder();
-      // Poll for updates every 10 seconds if order is active
-      const interval = setInterval(() => {
-        const activeStatuses = ["WAITING_FOR_SMS", "PENDING", "PROCESSING"];
-        if (activeStatuses.includes(order?.status)) {
-          fetchOrder();
-        }
-      }, 10000);
-      return () => clearInterval(interval);
-    }
+    if (!orderId) return;
+
+    fetchOrder();
+
+    // Poll for updates every 10 seconds
+    const interval = setInterval(() => {
+      // Only fetch if we don't have an order yet, or if it's in an active status
+      if (
+        !order ||
+        ["WAITING_FOR_SMS", "PENDING", "PROCESSING"].includes(order.status)
+      ) {
+        fetchOrder();
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, [orderId, order?.status]);
 
   const fetchOrder = async () => {
@@ -52,10 +78,13 @@ export default function OrderDetailPage() {
     }
   };
 
-  const handleCancel = async () => {
-    if (!confirm("Are you sure you want to cancel this order?")) return;
+  const handleCancelClick = () => {
+    setShowCancelDialog(true);
+  };
 
+  const handleCancelConfirm = async () => {
     setCancelling(true);
+    setShowCancelDialog(false);
     try {
       await api.cancelOrder(orderId);
       fetchOrder();
@@ -77,7 +106,7 @@ export default function OrderDetailPage() {
   if (!order) {
     return (
       <div className="container mx-auto p-6">
-        <Alert variant="destructive">Order not found</Alert>
+        <h3 className="text-red-700">Order not found</h3>
       </div>
     );
   }
@@ -103,15 +132,6 @@ export default function OrderDetailPage() {
     order.status
   );
 
-  const expiresAtMs = useMemo(() => {
-    return order?.expiresAt ? new Date(order.expiresAt).getTime() : null;
-  }, [order?.expiresAt]);
-
-  const remainingMs = useMemo(() => {
-    if (!expiresAtMs) return null;
-    return Math.max(0, expiresAtMs - now);
-  }, [expiresAtMs, now]);
-
   const formatDuration = (ms: number) => {
     const s = Math.floor(ms / 1000);
     const m = Math.floor(s / 60);
@@ -127,7 +147,7 @@ export default function OrderDetailPage() {
         ← Back to Orders
       </Button>
 
-      {error && <Alert variant="destructive">{error}</Alert>}
+      {error && <h3 className="text-red-700">{error}</h3>}
 
       <Card className="p-8">
         <div className="flex justify-between items-start mb-6">
@@ -204,7 +224,7 @@ export default function OrderDetailPage() {
 
         {/* Countdown & Status Messages */}
         {remainingMs !== null && canCancel && remainingMs > 0 && (
-          <Alert className="bg-amber-50 border-amber-200 mt-4">
+          <div className="bg-amber-50 border-amber-200 mt-4 p-6">
             <div className="flex flex-col">
               <span className="font-medium">Time remaining</span>
               <span className="text-sm text-muted-foreground">
@@ -212,14 +232,14 @@ export default function OrderDetailPage() {
                 {formatDuration(remainingMs)}.
               </span>
             </div>
-          </Alert>
+          </div>
         )}
 
         {order.status === "WAITING_FOR_SMS" && (
-          <Alert className="mt-4">
+          <div className="mt-4 border-dashed border-2 border-yellow-200 bg-yellow-50 p-4 rounded-md">
             Waiting for SMS code. This page will automatically update when the
             code is received.
-          </Alert>
+          </div>
         )}
 
         {order.status === "COMPLETED" && (
@@ -239,13 +259,35 @@ export default function OrderDetailPage() {
           <Button
             variant="destructive"
             className="w-full mt-6"
-            onClick={handleCancel}
+            onClick={handleCancelClick}
             disabled={cancelling || (remainingMs !== null && remainingMs === 0)}
           >
             {cancelling ? "Cancelling..." : "Cancel Order"}
           </Button>
         )}
       </Card>
+
+      {/* Cancel Confirmation Dialog */}
+      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Order</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel this order? This action will
+              refund the amount to your wallet.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>No, keep order</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Yes, cancel order
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
