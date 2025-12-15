@@ -51,125 +51,136 @@ interface CreateOrderInput {
   userId: string;
   serviceCode: string;
   country: string;
+  price: number; // Price is now required, fetched on the client for TextVerified
   preferredProvider?: string;
 }
 
 export class OrderService {
   async createOrder(input: CreateOrderInput) {
-    const { userId, serviceCode, country, preferredProvider } = input;
+    const { userId, serviceCode, country, price, preferredProvider } = input;
 
+    // 1. Validate User
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { balance: true, currency: true },
     });
     if (!user) throw new Error("User not found");
 
+    // 2. Validate Provider
     const providers = await this.getAvailableProviders(
       serviceCode,
       country,
       preferredProvider
     );
-    if (!providers.length)
-      throw new Error("No providers available for this service");
+    if (!providers.length) {
+      throw new Error("No providers available for this service and country.");
+    }
+    const selectedProvider = providers[0];
 
-    const pricing = await this.calculatePricing(
-      providers[0].id,
-      serviceCode,
-      country
-    );
-    if (Number(user.balance) < Number(pricing.finalPrice))
+    // 3. Validate Price and Balance
+    // For TextVerified, the price is passed in. For others, we might calculate it here.
+    // This logic assumes the passed 'price' is the final, correct price.
+    const finalPrice = new Prisma.Decimal(price);
+    if (user.balance.lt(finalPrice)) {
       throw new Error("Insufficient balance");
+    }
 
+    // 4. Create Order and Transaction in a single DB operation
     const order = await prisma.$transaction(async (tx) => {
+      // Debit user's balance
       await tx.user.update({
         where: { id: userId },
-        data: { balance: { decrement: pricing.finalPrice } },
+        data: { balance: { decrement: finalPrice } },
       });
-      await tx.transaction.create({
+
+      // Create a transaction record for the payment
+      const transaction = await tx.transaction.create({
         data: {
           userId,
           transactionNumber: `TXN-${Date.now()}-${Math.random()
             .toString(36)
             .slice(2, 9)}`,
           type: "ORDER_PAYMENT",
-          amount: pricing.finalPrice,
+          amount: finalPrice,
           currency: user.currency,
           balanceBefore: user.balance,
-          balanceAfter: Number(user.balance) - Number(pricing.finalPrice),
+          balanceAfter: user.balance.sub(finalPrice),
           status: "COMPLETED",
-          description: `Order for ${serviceCode} - ${country}`,
+          description: `Payment for ${serviceCode} in ${country}`,
         },
       });
+
+      // Create the order record
       const newOrder = await tx.order.create({
         data: {
           userId,
-          providerId: providers[0].id,
-          serviceId: providers[0].services[0].id,
-          orderNumber: `ORD-${Date.now()}-${Math.random()
-            .toString(36)
-            .slice(2, 9)}`,
+          providerId: selectedProvider.id,
           serviceCode,
           country,
-          baseCost: pricing.baseCost,
-          profit: pricing.profit,
-          finalPrice: pricing.finalPrice,
-          currency: user.currency,
-          status: "PENDING",
-          expiresAt: new Date(Date.now() + 20 * 60 * 1000),
+          price: finalPrice,
+          transactionId: transaction.id,
+          status: "PROCESSING", // Status is now 'PROCESSING'
+          expiresAt: new Date(Date.now() + 20 * 60 * 1000), // 20-minute expiry
         },
       });
+
       return newOrder;
     });
 
+    // 5. Request number from the provider (outside the main DB transaction)
     try {
-      // Decide provider adapter based on selected provider
-      const selectedProvider = providers[0];
-      const provName = (selectedProvider.name || "").toLowerCase();
-      console.log("[OrderService] Selected provider:", selectedProvider);
-
-      const useLion = provName.includes("lion") || provName.includes("sms-man");
-      const usePanda =
-        provName.includes("panda") || provName.includes("textverified");
-
-      const providerService = useLion
-        ? new SMSManService()
-        : new TextVerifiedService();
-
+      const providerService = this.getProviderService(selectedProvider.name);
       console.log(
-        "[OrderService] Requesting number from",
-        useLion ? "Lion (SMS-Man)" : "Panda (TextVerified)",
-        { serviceCode, country }
+        `[OrderService] Requesting number from ${selectedProvider.name}...`
       );
 
       const providerOrder = await providerService.requestNumber(
         serviceCode,
-        country
+        country,
+        order.id // Pass orderId for logging and context
       );
-      await prisma.order.update({
+
+      // Update order with provider details
+      const updatedOrder = await prisma.order.update({
         where: { id: order.id },
         data: {
-          providerOrderId: providerOrder.id,
+          externalId: providerOrder.id,
           phoneNumber: providerOrder.phoneNumber,
-          status: "WAITING_SMS",
+          cost: providerOrder.cost
+            ? new Prisma.Decimal(providerOrder.cost)
+            : undefined,
+          status: "WAITING_FOR_SMS",
         },
       });
-      await redis.setOrderStatus(
-        order.id,
-        { status: "WAITING_SMS", phoneNumber: providerOrder.phoneNumber },
-        300
-      );
+
       return {
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        phoneNumber: providerOrder.phoneNumber,
-        status: "WAITING_SMS",
-        expiresAt: order.expiresAt,
+        orderId: updatedOrder.id,
+        phoneNumber: updatedOrder.phoneNumber,
+        status: updatedOrder.status,
+        expiresAt: updatedOrder.expiresAt,
       };
     } catch (e) {
-      console.error("[OrderService] Provider request failed:", e);
-      await this.refundOrder(order.id);
-      throw new Error("Failed to create order with provider");
+      console.error(
+        `[OrderService] Provider request failed for order ${order.id}. Refunding...`,
+        e
+      );
+      // If provider fails, refund the order
+      await this.refundOrder(order.id, "PROVIDER_FAILURE");
+      throw new Error("Failed to secure a number from the provider.");
     }
+  }
+
+  private getProviderService(
+    providerName: string
+  ): SMSManService | TextVerifiedService {
+    const name = providerName.toLowerCase();
+    if (name.includes("lion") || name.includes("sms-man")) {
+      return new SMSManService();
+    }
+    if (name.includes("panda") || name.includes("textverified")) {
+      return new TextVerifiedService();
+    }
+    throw new Error(`Unknown provider: ${providerName}`);
   }
 
   async getAvailableProviders(
@@ -177,24 +188,37 @@ export class OrderService {
     country: string,
     preferred?: string
   ) {
-    const cacheKey = `providers:available:${serviceCode}:${country}`;
-    const cached = await redis.get(cacheKey);
-    if (cached) return JSON.parse(cached);
+    // For TextVerified, which is US-only and on-demand, the logic is different.
+    if (
+      country === "US" &&
+      (!preferred || preferred.toLowerCase().includes("textverified"))
+    ) {
+      const tvProvider = await prisma.provider.findFirst({
+        where: {
+          name: { contains: "textverified", mode: "insensitive" },
+          isActive: true,
+          healthStatus: "HEALTHY",
+        },
+      });
+      if (tvProvider) return [tvProvider];
+    }
 
-    const providers = await prisma.provider.findMany({
+    // For other providers (like SMS-Man), we check if they have the service in our DB.
+    // This part of the logic remains the same.
+    const otherProviders = await prisma.provider.findMany({
       where: {
         isActive: true,
         healthStatus: "HEALTHY",
+        name: { not: { contains: "textverified", mode: "insensitive" } },
         ...(preferred && { name: preferred }),
         services: {
           some: { serviceCode, country, isActive: true, available: true },
         },
       },
-      include: { services: { where: { serviceCode, country } } },
       orderBy: { priority: "desc" },
     });
-    await redis.set(cacheKey, JSON.stringify(providers), 60);
-    return providers;
+
+    return otherProviders;
   }
 
   async calculatePricing(
@@ -280,37 +304,77 @@ export class OrderService {
     return payload;
   }
 
-  async refundOrder(orderId: string) {
-    await prisma.$transaction(async (tx) => {
+  async refundOrder(
+    orderId: string,
+    reason: "USER_CANCELLED" | "PROVIDER_FAILURE" | "EXPIRED"
+  ) {
+    return await prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: orderId },
-        include: { user: true },
+        select: {
+          id: true,
+          userId: true,
+          price: true,
+          status: true,
+          user: { select: { balance: true } },
+        },
       });
-      if (!order) return;
+
+      if (!order) {
+        console.error(`[Refund] Order ${orderId} not found.`);
+        return;
+      }
+
+      // Only refund if the order is in a refundable state
+      if (
+        order.status === "REFUNDED" ||
+        order.status === "COMPLETED" ||
+        order.status === "CANCELLED"
+      ) {
+        console.warn(
+          `[Refund] Order ${orderId} is already in a final state (${order.status}). No refund will be processed.`
+        );
+        return;
+      }
+
+      // Update order status based on reason
+      let newStatus: OrderStatus = "REFUNDED";
+      if (reason === "USER_CANCELLED") newStatus = "CANCELLED";
+      if (reason === "PROVIDER_FAILURE") newStatus = "FAILED";
+      if (reason === "EXPIRED") newStatus = "EXPIRED";
+
       await tx.order.update({
         where: { id: orderId },
-        data: { status: "REFUNDED", cancelledAt: new Date() },
+        data: { status: newStatus },
       });
+
+      // Refund the money
+      const newBalance = order.user.balance.add(order.price);
       await tx.user.update({
         where: { id: order.userId },
-        data: { balance: { increment: order.finalPrice } },
+        data: { balance: { increment: order.price } },
       });
+
+      // Create a refund transaction
       await tx.transaction.create({
         data: {
           userId: order.userId,
-          transactionNumber: `REFUND-${Date.now()}`,
-          type: "REFUND",
-          amount: order.finalPrice,
-          currency: order.currency,
-          balanceBefore: order.user.balance,
-          balanceAfter: Number(order.user.balance) + Number(order.finalPrice),
           orderId: order.id,
+          transactionNumber: `REF-${Date.now()}-${order.id.slice(0, 4)}`,
+          type: "REFUND",
+          amount: order.price,
+          currency: "USD", // Assuming currency from order or user
+          balanceBefore: order.user.balance,
+          balanceAfter: newBalance,
           status: "COMPLETED",
-          description: `Refund for order ${order.orderNumber}`,
+          description: `Refund for order ${order.id} due to ${reason}`,
         },
       });
+
+      console.log(
+        `[Refund] Successfully processed refund for order ${orderId}.`
+      );
     });
-    await redis.invalidateOrder(orderId);
   }
 
   async cancelOrder(orderId: string, userId: string) {
@@ -318,14 +382,20 @@ export class OrderService {
       where: { id: orderId, userId },
     });
     if (!order) throw new Error("Order not found");
-    if (order.status !== "PENDING" && order.status !== "WAITING_SMS")
-      throw new Error("Order cannot be cancelled");
-    await this.refundOrder(orderId);
-    await prisma.order.update({
-      where: { id: orderId },
-      data: { status: "CANCELLED", cancelledAt: new Date() },
-    });
-    return { ok: true };
+
+    if (
+      order.status !== "PENDING" &&
+      order.status !== "PROCESSING" &&
+      order.status !== "WAITING_FOR_SMS"
+    ) {
+      throw new Error(`Order is in a non-cancellable state: ${order.status}`);
+    }
+
+    // TODO: Add logic here to cancel the number with the provider (e.g., SMSManService.cancelNumber(order.externalId))
+
+    await this.refundOrder(orderId, "USER_CANCELLED");
+
+    return { ok: true, message: "Order cancelled and refunded." };
   }
 }
 
@@ -433,15 +503,30 @@ export class SMSManService {
     }
   }
 
-  async requestNumber(serviceCode: string, country: string) {
-    console.log("[SMSManService] requestNumber", { serviceCode, country });
+  async requestNumber(
+    serviceCode: string,
+    country: string,
+    orderId: string
+  ): Promise<{ id: string; phoneNumber: string; cost?: number }> {
+    console.log("[SMSManService] requestNumber", {
+      serviceCode,
+      country,
+      orderId,
+    });
 
     if (!this.apiKey) {
       throw new Error("SMS-Man API key not configured");
     }
 
+    // This needs to be reversed; we get a service code like 'wa' and need the ID
+    const applications = await this.getApplications();
+    const app = applications.find((a) => a.code === serviceCode);
+    if (!app) {
+      throw new Error(`SMS-Man does not support service code: ${serviceCode}`);
+    }
+    const applicationId = app.id;
+
     const countryId = this.getCountryIdFromCode(country);
-    const applicationId = serviceCode;
 
     const url = `${this.apiUrl}/get-number?token=${this.apiKey}&country_id=${countryId}&application_id=${applicationId}`;
     console.log("[SMSManService] GET", url);
@@ -457,7 +542,24 @@ export class SMSManService {
     return {
       id: data.request_id.toString(),
       phoneNumber: data.number,
+      cost: data.cost, // Assuming the API returns a cost
     };
+  }
+
+  private async getApplications(): Promise<{ id: string; code: string }[]> {
+    const cacheKey = "smsman:applications";
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
+    const res = await fetch(`${this.apiUrl}/applications?token=${this.apiKey}`);
+    const data = await res.json();
+    const applications = Object.values(data).map((a: any) => ({
+      id: a.id,
+      code: a.slug || a.code, // 'slug' is often the code we need
+    }));
+
+    await redis.set(cacheKey, JSON.stringify(applications), 60 * 60 * 24); // Cache for 24 hours
+    return applications;
   }
 
   private getCountryIdFromCode(countryCode: string): string {
@@ -751,11 +853,56 @@ export class TextVerifiedService {
     return null;
   }
 
-  async requestNumber(serviceCode: string, country: string) {
-    console.log("[TextVerifiedService] requestNumber", {
-      serviceCode,
+  async requestNumber(
+    serviceName: string,
+    country: string,
+    orderId: string
+  ): Promise<{ id: string; phoneNumber: string; cost?: number }> {
+    console.log("[TextVerified] Requesting number for:", {
+      serviceName,
       country,
+      orderId,
     });
-    throw new Error("TextVerified integration not fully implemented yet");
+
+    if (country !== "US") {
+      throw new Error("TextVerified only supports the US.");
+    }
+
+    const bearerToken = await this.getBearerToken();
+    const verificationUrl = `${this.apiUrl}/verifications`;
+
+    const body = {
+      serviceName,
+      numberType: "mobile",
+    };
+
+    const res = await fetchWithRetry(verificationUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${bearerToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    const responseData = await res.json();
+    console.log(
+      `[TextVerified] Verification response (${res.status}):`,
+      responseData
+    );
+
+    if (!res.ok || !responseData.id) {
+      throw new Error(
+        `Failed to request number from TextVerified: ${
+          responseData.message || "Unknown error"
+        }`
+      );
+    }
+
+    return {
+      id: responseData.id,
+      phoneNumber: responseData.number,
+      cost: responseData.price,
+    };
   }
 }

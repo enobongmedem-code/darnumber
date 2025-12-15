@@ -184,7 +184,6 @@ model Service {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  orders   Order[]
 
   @@unique([providerId, serviceCode, country])
   @@index([serviceCode, country, isActive])
@@ -245,71 +244,60 @@ enum ProfitType {
 }
 
 // ============================================
-// ORDERS & TRANSACTIONS
+// ORDER MANAGEMENT
 // ============================================
 
 model Order {
   id         String @id @default(cuid())
   userId     String @map("user_id")
   providerId String @map("provider_id")
-  serviceId  String @map("service_id")
 
-  // Order details
-  orderNumber String  @unique @map("order_number")
-  serviceCode String  @map("service_code")
+  // Service details are stored directly on the order
+  serviceCode String @map("service_code")
   country     String
-  phoneNumber String? @map("phone_number")
 
-  // Provider details
-  providerOrderId String? @map("provider_order_id")
+  // Order details from provider
+  externalId  String?  @unique @map("external_id") // The ID from the provider (e.g., SMS-Man activation ID)
+  phoneNumber String?  @map("phone_number")
+  smsCode     String?  @map("sms_code")
+  cost        Decimal? @db.Decimal(15, 4) // The actual cost from the provider after purchase
 
-  // SMS details
-  smsCode    String?   @map("sms_code")
-  smsText    String?   @map("sms_text")
-  receivedAt DateTime? @map("received_at")
+  // Pricing & Transaction
+  price         Decimal     @db.Decimal(15, 4) // The price quoted to the user
+  transactionId String?     @unique @map("transaction_id")
+  status        OrderStatus @default(PENDING)
 
-  // Pricing
-  baseCost   Decimal @map("base_cost") @db.Decimal(10, 4)
-  profit     Decimal @db.Decimal(10, 4)
-  finalPrice Decimal @map("final_price") @db.Decimal(10, 4)
-  currency   String  @default("NGN")
+  // Timestamps
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  expiresAt DateTime? @map("expires_at") // When the number rental expires
 
-  // Status & Lifecycle
-  status      OrderStatus @default(PENDING)
-  expiresAt   DateTime    @map("expires_at")
-  completedAt DateTime?   @map("completed_at")
-  cancelledAt DateTime?   @map("cancelled_at")
+  // Relations
+  user        User         @relation(fields: [userId], references: [id])
+  provider    Provider     @relation(fields: [providerId], references: [id])
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
 
-  // Retry logic
-  retryCount Int @default(0) @map("retry_count")
-
-  // Metadata
-  metadata Json @default("{}")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  user     User     @relation(fields: [userId], references: [id])
-  provider Provider @relation(fields: [providerId], references: [id])
-  service  Service  @relation(fields: [serviceId], references: [id])
-
-  @@index([userId, status])
-  @@index([orderNumber])
-  @@index([status, createdAt])
-  @@index([providerId, status])
-  @@index([expiresAt])
+  @@index([userId])
+  @@index([providerId])
+  @@index([status])
+  @@index([externalId])
   @@map("orders")
 }
 
 enum OrderStatus {
-  PENDING
-  WAITING_SMS
-  COMPLETED
-  CANCELLED
-  EXPIRED
-  FAILED
-  REFUNDED
+  PENDING // Order created, waiting for payment/processing
+  PROCESSING // Payment successful, requesting number from provider
+  WAITING_FOR_SMS // Number received, waiting for SMS to arrive
+  COMPLETED // SMS received, order is complete
+  CANCELLED // User cancelled the order
+  FAILED // Could not get a number, or another error occurred
+  EXPIRED // Number rental time expired before SMS arrived
+  REFUNDED // Order was cancelled/failed and funds returned
 }
+
+// ============================================
+// FINANCIAL & TRANSACTIONS
+// ============================================
 
 model Transaction {
   id     String @id @default(cuid())
@@ -343,7 +331,8 @@ model Transaction {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id])
+  user  User   @relation(fields: [userId], references: [id])
+  order Order?
 
   @@index([userId, createdAt])
   @@index([transactionNumber])

@@ -49,13 +49,19 @@ export async function POST(req: NextRequest) {
 
     console.log("3. Parsing request body...");
     const body = await req.json();
-    const { serviceCode, country, provider } = body || {};
+    const { serviceCode, country, provider, price } = body || {};
 
-    console.log("4. Request data:", { serviceCode, country, provider, body });
+    console.log("4. Request data:", {
+      serviceCode,
+      country,
+      provider,
+      price,
+      body,
+    });
 
-    if (!serviceCode || !country) {
+    if (!serviceCode || !country || !price) {
       console.log("5. ❌ Validation failed - Missing required fields");
-      return error("serviceCode and country required", 400);
+      return error("serviceCode, country, and price are required", 400);
     }
 
     console.log("5. ✅ Validation passed, creating order...");
@@ -64,6 +70,7 @@ export async function POST(req: NextRequest) {
       userId: session.user.id,
       serviceCode,
       country,
+      price,
       preferredProvider: provider,
     });
 

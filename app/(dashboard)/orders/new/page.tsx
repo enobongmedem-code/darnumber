@@ -401,18 +401,31 @@ export default function NewOrderPage() {
 
     try {
       const provider = providers.find((p) => p.id === selectedProvider);
+      const price =
+        currentProvider?.name.includes("textverified") &&
+        servicePrices[selectedService] > 0
+          ? servicePrices[selectedService]
+          : currentPriceUsd;
+
+      if (!price || price <= 0) {
+        setError(
+          "Could not determine the price for this service. Please try again."
+        );
+        setCreating(false);
+        return;
+      }
+
       const response = await api.createOrder({
         serviceCode: selectedService,
         country: selectedCountry,
         provider: provider?.name,
+        price: price, // Pass the final price in USD
       });
       console.log("[NewOrderPage] Creating order with pricing:", {
         serviceCode: selectedService,
         country: selectedCountry,
         provider: provider?.name,
-        price_usd: currentPriceUsd,
-        price_ngn: currentPriceNgn,
-        rate_usd_to_ngn: usdToNgn,
+        price_usd: price,
       });
 
       if (response.ok) {
