@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/server/prisma";
+import { Prisma } from "@/app/generated/prisma";
 import { RedisService } from "@/lib/server/services/redis.service";
 
 const redis = new RedisService();
@@ -118,6 +119,7 @@ export class OrderService {
           serviceCode,
           country,
           price: finalPrice,
+          finalPrice: finalPrice, // Final price (same as price for now, could be different with discounts)
           transactionId: transaction.id,
           status: "PROCESSING", // Status is now 'PROCESSING'
           expiresAt: new Date(Date.now() + 20 * 60 * 1000), // 20-minute expiry
@@ -188,37 +190,39 @@ export class OrderService {
     country: string,
     preferred?: string
   ) {
-    // For TextVerified, which is US-only and on-demand, the logic is different.
-    if (
-      country === "US" &&
-      (!preferred || preferred.toLowerCase().includes("textverified"))
-    ) {
-      const tvProvider = await prisma.provider.findFirst({
-        where: {
-          name: { contains: "textverified", mode: "insensitive" },
-          isActive: true,
-          healthStatus: "HEALTHY",
-        },
+    // Use hardcoded providers instead of DB queries
+    const availableProviders: Array<{
+      id: string;
+      name: string;
+      priority: number;
+    }> = [];
+
+    // Check if SMS-Man (Lion) supports this country
+    if (preferred === "sms-man" || !preferred) {
+      // SMS-Man supports all countries globally
+      availableProviders.push({
+        id: "sms-man",
+        name: "sms-man",
+        priority: 1,
       });
-      if (tvProvider) return [tvProvider];
     }
 
-    // For other providers (like SMS-Man), we check if they have the service in our DB.
-    // This part of the logic remains the same.
-    const otherProviders = await prisma.provider.findMany({
-      where: {
-        isActive: true,
-        healthStatus: "HEALTHY",
-        name: { not: { contains: "textverified", mode: "insensitive" } },
-        ...(preferred && { name: preferred }),
-        services: {
-          some: { serviceCode, country, isActive: true, available: true },
-        },
-      },
-      orderBy: { priority: "desc" },
-    });
+    // Check if TextVerified (Panda) supports this country
+    if (country === "US" && (preferred === "textverified" || !preferred)) {
+      availableProviders.push({
+        id: "textverified",
+        name: "textverified",
+        priority: 2,
+      });
+    }
 
-    return otherProviders;
+    // If a preferred provider was specified but not added, return empty
+    if (preferred && availableProviders.length === 0) {
+      return [];
+    }
+
+    // Sort by priority (higher priority first)
+    return availableProviders.sort((a, b) => b.priority - a.priority);
   }
 
   async calculatePricing(
@@ -279,26 +283,21 @@ export class OrderService {
         phoneNumber: true,
         status: true,
         smsCode: true,
-        smsText: true,
         expiresAt: true,
         createdAt: true,
         finalPrice: true,
         currency: true,
         serviceCode: true,
         country: true,
-        provider: {
-          select: { name: true, displayName: true },
-        },
+        providerId: true,
       },
     });
     if (!order) return null;
     const payload = {
       ...order,
-      provider:
-        order.provider?.displayName || order.provider?.name || undefined,
+      provider: order.providerId,
     } as any;
-    delete (payload as any).provider?.displayName;
-    delete (payload as any).provider?.name;
+    delete (payload as any).providerId;
     await redis.setOrderStatus(orderId, payload, 300);
     console.log("[OrderService] getOrderStatus payload", payload);
     return payload;

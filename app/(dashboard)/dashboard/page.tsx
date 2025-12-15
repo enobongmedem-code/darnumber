@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "@/lib/toast";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -31,8 +32,25 @@ export default function DashboardPage() {
       setRecentOrders(ordersRes.data);
     } catch (error: any) {
       console.error("Failed to fetch dashboard data:", error);
+
+      // Handle different error cases with appropriate toasts
       if (error.response?.status === 401) {
+        toast.auth.sessionExpired();
         router.push("/login");
+      } else if (error.response?.status === 500) {
+        toast.api.serverError();
+      } else if (error.response?.status === 404) {
+        toast.api.notFound("Dashboard data");
+      } else if (
+        error.code === "ECONNABORTED" ||
+        error.message === "Network Error"
+      ) {
+        toast.api.networkError();
+      } else {
+        toast.error(
+          "Failed to load dashboard",
+          error.response?.data?.message || "An unexpected error occurred."
+        );
       }
     } finally {
       setLoading(false);

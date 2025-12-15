@@ -12,12 +12,16 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.identifier || !credentials?.password) return null;
+        if (!credentials?.identifier || !credentials?.password) {
+          throw new Error("Please provide email and password.");
+        }
         const user = await verifyUserCredentials(
           credentials.identifier,
           credentials.password
         );
-        if (!user) return null;
+        if (!user) {
+          throw new Error("Invalid email or password.");
+        }
         return user;
       },
     }),

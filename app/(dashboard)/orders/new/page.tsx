@@ -239,15 +239,6 @@ export default function NewOrderPage() {
         const priceUsd = (s as any).prices?.[selectedProvider] ?? s.price ?? 0;
         const priceNgn = Math.round(priceUsd * (usdToNgn || 0));
 
-        console.log(`[NewOrderPage] 💰 Country pricing (${s.country}):`, {
-          service: selectedService,
-          provider: selectedProvider,
-          price_usd: priceUsd.toFixed(2),
-          usd_to_ngn_rate: usdToNgn,
-          final_price_ngn: priceNgn,
-          note: "Backend already applied (×1.20 + ₦2000)",
-        });
-
         return {
           code: s.country,
           name:
@@ -510,7 +501,7 @@ export default function NewOrderPage() {
             ) : price && price > 0 ? (
               <div className="font-mono text-sm">~${price.toFixed(2)}</div>
             ) : (
-              <div className="text-xs text-muted-foreground">N/A</div>
+              <div className="text-xs text-muted-foreground">✅</div>
             )}
           </div>
         </button>
@@ -613,7 +604,7 @@ export default function NewOrderPage() {
               </Alert>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6" id="order-form">
               {/* Provider Selection */}
               <div>
                 <Label className="mb-3 block text-base font-semibold">
@@ -990,9 +981,13 @@ export default function NewOrderPage() {
                   >
                     {selectedCountry ? (
                       <span className="truncate">
-                        {availableCountries.find(
-                          (c) => c.code === selectedCountry
-                        )?.name || "Selected country"}
+                        {countryNameByCode.get(
+                          String(selectedCountry).toUpperCase()
+                        ) ||
+                          availableCountries.find(
+                            (c) => c.code === selectedCountry
+                          )?.name ||
+                          selectedCountry}
                       </span>
                     ) : (
                       <span className="text-muted-foreground">

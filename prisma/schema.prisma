@@ -154,7 +154,6 @@ model Provider {
 
   // Relations
   services       Service[]
-  orders         Order[]
   providerPrices ProviderPrice[]
 
   @@index([isActive, priority])
@@ -248,9 +247,10 @@ enum ProfitType {
 // ============================================
 
 model Order {
-  id         String @id @default(cuid())
-  userId     String @map("user_id")
-  providerId String @map("provider_id")
+  id          String @id @default(cuid())
+  userId      String @map("user_id")
+  providerId  String @map("provider_id") // Just a string identifier (e.g., "sms-man", "textverified") - no FK constraint
+  orderNumber String @unique @default(cuid()) @map("order_number") // Unique order number for display
 
   // Service details are stored directly on the order
   serviceCode String @map("service_code")
@@ -264,6 +264,8 @@ model Order {
 
   // Pricing & Transaction
   price         Decimal     @db.Decimal(15, 4) // The price quoted to the user
+  finalPrice    Decimal     @map("final_price") @db.Decimal(15, 4) // Final price after discounts/fees
+  currency      String      @default("NGN") // Currency for this order
   transactionId String?     @unique @map("transaction_id")
   status        OrderStatus @default(PENDING)
 
@@ -274,13 +276,13 @@ model Order {
 
   // Relations
   user        User         @relation(fields: [userId], references: [id])
-  provider    Provider     @relation(fields: [providerId], references: [id])
   transaction Transaction? @relation(fields: [transactionId], references: [id])
 
   @@index([userId])
   @@index([providerId])
   @@index([status])
   @@index([externalId])
+  @@index([orderNumber])
   @@map("orders")
 }
 

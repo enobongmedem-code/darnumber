@@ -208,6 +208,13 @@ class ApiClient {
     return response.data;
   }
 
+  async getTextVerifiedPrice(serviceName: string) {
+    const response = await this.client.get(
+      `/providers/textverified/price?service=${serviceName}`
+    );
+    return response.data;
+  }
+
   // ============================================
   // USER METHODS
   // ============================================
@@ -268,7 +275,7 @@ class ApiClient {
   }
 
   async getUserStats() {
-    const response = await this.client.get("/users/stats");
+    const response = await this.client.get("/user/stats");
     return response.data;
   }
 

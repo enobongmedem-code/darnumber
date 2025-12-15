@@ -7,12 +7,13 @@ export const runtime = "nodejs";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
     await requireAuth();
     const service = new OrderService();
-    const data = await service.getOrderStatus(params.orderId);
+    const { orderId } = await params;
+    const data = await service.getOrderStatus(orderId);
     if (!data) return error("Not found", 404);
     return json({ ok: true, data });
   } catch (e) {
