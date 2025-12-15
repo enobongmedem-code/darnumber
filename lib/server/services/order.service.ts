@@ -607,7 +607,7 @@ export class TextVerifiedService {
       // Fetch pricing for each service with rate limiting
       console.log(`[TextVerified] Fetching pricing with rate limiting...`);
       const pricingUrl = `${this.apiUrl}/pricing/verifications`;
-      
+
       // Rate limiting configuration
       const BATCH_SIZE = 10; // Process 10 services at a time
       const DELAY_BETWEEN_BATCHES = 2000; // 2 second delay between batches
@@ -616,10 +616,13 @@ export class TextVerifiedService {
 
       // Limit services to process
       const limitedServicesList = servicesList.slice(0, MAX_SERVICES);
-      console.log(`[TextVerified] Processing ${limitedServicesList.length} of ${servicesList.length} services (limited for performance)`);
+      console.log(
+        `[TextVerified] Processing ${limitedServicesList.length} of ${servicesList.length} services (limited for performance)`
+      );
 
       // Helper: delay function
-      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      const delay = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
 
       // Helper: robust pricing fetch trying id-based first, then fallbacks
       const fetchPricing = async (
@@ -644,7 +647,7 @@ export class TextVerifiedService {
 
         let lastStatus = 0;
         let lastBody: string | undefined;
-        
+
         for (const body of payloads) {
           try {
             const res = await fetch(pricingUrl, {
@@ -656,19 +659,21 @@ export class TextVerifiedService {
               body: JSON.stringify(body),
             });
             lastStatus = res.status;
-            
+
             // Handle rate limiting with retry
             if (res.status === 429 && retries > 0) {
-              const retryAfter = parseInt(res.headers.get('Retry-After') || '5');
+              const retryAfter = parseInt(
+                res.headers.get("Retry-After") || "5"
+              );
               await delay(retryAfter * 1000);
               return fetchPricing(svc, idx, retries - 1);
             }
-            
+
             if (!res.ok) {
               lastBody = await res.text().catch(() => undefined);
               continue;
             }
-            
+
             const data = await res.json().catch(() => ({}));
             const priceCandidate =
               (typeof data.price === "number" && data.price) ||
@@ -683,9 +688,13 @@ export class TextVerifiedService {
             if (!price || price <= 0) {
               continue;
             }
-            
+
             if ((idx + 1) % 50 === 0) {
-              console.log(`[TextVerified] Processed ${idx + 1}/${limitedServicesList.length} services...`);
+              console.log(
+                `[TextVerified] Processed ${idx + 1}/${
+                  limitedServicesList.length
+                } services...`
+              );
             }
             return { price, raw: data };
           } catch (e) {
@@ -702,20 +711,24 @@ export class TextVerifiedService {
       // Process services in batches with rate limiting
       const servicesWithPricing: any[] = [];
       const totalBatches = Math.ceil(limitedServicesList.length / BATCH_SIZE);
-      
+
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
         const start = batchIndex * BATCH_SIZE;
         const end = Math.min(start + BATCH_SIZE, limitedServicesList.length);
         const batch = limitedServicesList.slice(start, end);
-        
-        console.log(`[TextVerified] Processing batch ${batchIndex + 1}/${totalBatches} (services ${start + 1}-${end})...`);
-        
+
+        console.log(
+          `[TextVerified] Processing batch ${
+            batchIndex + 1
+          }/${totalBatches} (services ${start + 1}-${end})...`
+        );
+
         // Process batch sequentially with small delays
         for (let i = 0; i < batch.length; i++) {
           const service = batch[i];
           const globalIndex = start + i;
           const pricing = await fetchPricing(service, globalIndex);
-          
+
           // Only include services with valid pricing
           if (pricing && pricing.price > 0) {
             servicesWithPricing.push({
@@ -730,13 +743,13 @@ export class TextVerifiedService {
               capability: service.capability || "sms",
             });
           }
-          
+
           // Small delay between requests
           if (i < batch.length - 1) {
             await delay(DELAY_BETWEEN_REQUESTS);
           }
         }
-        
+
         // Delay between batches (except for the last batch)
         if (batchIndex < totalBatches - 1) {
           await delay(DELAY_BETWEEN_BATCHES);
