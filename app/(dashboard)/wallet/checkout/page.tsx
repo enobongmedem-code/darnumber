@@ -143,9 +143,9 @@ export default function CheckoutPage() {
               <div className="grid grid-cols-1 gap-3">
                 {(
                   [
-                    { key: "etegram", label: "Etegram (Default)" },
-                    { key: "paystack", label: "Paystack" },
-                    { key: "flutterwave", label: "Flutterwave" },
+                    { key: "etegram", label: "Etegram " },
+                    // { key: "paystack", label: "Paystack" },
+                    // { key: "flutterwave", label: "Flutterwave" },
                   ] as { key: Provider; label: string }[]
                 ).map((p) => (
                   <button
@@ -164,7 +164,7 @@ export default function CheckoutPage() {
                     </div>
                     <div className="text-xs md:text-sm text-muted-foreground mt-1">
                       {p.key === "etegram" &&
-                        "Bank transfer checkout (webhook confirmed)"}
+                        "Bank transfer checkout via Etegram"}
                       {p.key === "paystack" && "Cards, Bank Transfer, USSD"}
                       {p.key === "flutterwave" && "Cards, Bank, Mobile Money"}
                     </div>
@@ -183,16 +183,17 @@ export default function CheckoutPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex-1">
               <h2 className="font-semibold text-sm md:text-base">
-                Dedicated Bank Account
+                Dedicated Bank Account (Coming Soon)
               </h2>
               <p className="text-xs md:text-sm text-muted-foreground mt-1">
                 Request a personal virtual account for easy top-ups.
               </p>
             </div>
             <Button
+              disabled
               variant="secondary"
               onClick={requestDedicatedAccount}
-              disabled={loading}
+              // disabled={loading}
               className="w-full sm:w-auto whitespace-nowrap"
             >
               {loading ? "Requesting..." : "Request Account"}

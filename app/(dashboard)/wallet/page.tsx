@@ -177,6 +177,7 @@ export default function WalletPage() {
           )}
           <div className="flex gap-2">
             <Button
+              disabled
               variant="secondary"
               onClick={async () => {
                 setDvaError("");
