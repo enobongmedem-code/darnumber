@@ -447,7 +447,8 @@ export class OrderService {
       }
 
       // Update order status based on reason
-      let newStatus = "REFUNDED" as const;
+      let newStatus: "REFUNDED" | "CANCELLED" | "FAILED" | "EXPIRED" =
+        "REFUNDED";
       if (reason === "USER_CANCELLED") newStatus = "CANCELLED";
       if (reason === "PROVIDER_FAILURE") newStatus = "FAILED";
       if (reason === "EXPIRED") newStatus = "EXPIRED";
@@ -1027,7 +1028,7 @@ export class TextVerifiedService {
 
     // Default base price: $0.50 USD
     // This is just for display - actual pricing happens at order time
-    const defaultPrice = 0.5;
+    const defaultPrice = 0;
 
     // Cache for 24 hours
     await redis.set(cacheKey, defaultPrice.toString(), 60 * 60 * 24);

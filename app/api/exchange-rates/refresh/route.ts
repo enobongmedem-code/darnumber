@@ -13,13 +13,15 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   try {
     // Only admins can manually refresh rates
-    const user = await requireAuth();
+    const session = await requireAuth();
 
-    if (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN") {
+    if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") {
       return error("Unauthorized: Admin access required", 403);
     }
 
-    console.log(`[ExchangeRates] Manual refresh triggered by ${user.email}`);
+    console.log(
+      `[ExchangeRates] Manual refresh triggered by ${session.user.email}`
+    );
 
     await ExchangeRateService.refreshCommonRates();
 

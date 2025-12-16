@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     console.log("[DVA][POST] assigned=", data);
     if ((data as any)?.status === "PENDING") {
       // Inform client that assignment is in progress
-      return json({ ok: true, data }, 202);
+      return json({ ok: true, data }, { status: 202 });
     }
     return json({ ok: true, data });
   } catch (e) {

@@ -11,8 +11,8 @@ export async function GET(req: NextRequest) {
     console.log("1. Starting authentication check...");
     const authResult = await requireAuth();
     console.log("2. Authentication successful:", {
-      userId: authResult?.id,
-      email: authResult?.email,
+      userId: authResult?.user?.id,
+      email: authResult?.user?.email,
     });
 
     console.log("3. Parsing request URL:", req.url);

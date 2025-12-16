@@ -263,10 +263,25 @@ export default function NewOrderPage() {
           s.providers.some((p) => p.id === selectedProvider)
       )
       .map((s) => {
-        // Backend sends USD price with full markup already applied: (base × 1.20) + 2000 NGN
-        // Frontend only converts USD → NGN
-        const priceUsd = (s as any).prices?.[selectedProvider] ?? s.price ?? 0;
-        const priceNgn = Math.round(priceUsd * (usdToNgn || 0));
+        // Backend sends prices with full markup already applied in NGN
+        const isTextVerified = providers
+          .find((p) => p.id === selectedProvider)
+          ?.name?.toLowerCase()
+          ?.includes("textverified");
+
+        let priceNgn = 0;
+        let priceUsd = 0;
+
+        if (isTextVerified) {
+          // TextVerified: Use dynamically fetched NGN price (already includes markup)
+          const tvNgn = servicePrices[selectedService];
+          priceNgn = tvNgn && tvNgn > 0 ? tvNgn : 0;
+          priceUsd = priceNgn > 0 && usdToNgn > 0 ? priceNgn / usdToNgn : 0;
+        } else {
+          // SMS-Man: Convert USD to NGN
+          priceUsd = (s as any).prices?.[selectedProvider] ?? s.price ?? 0;
+          priceNgn = Math.round(priceUsd * (usdToNgn || 0));
+        }
 
         return {
           code: s.country,
@@ -284,7 +299,8 @@ export default function NewOrderPage() {
     selectedProvider,
     countryNameByCode,
     usdToNgn,
-    rubToUsd,
+    providers,
+    servicePrices,
   ]);
 
   // Filter services based on search
@@ -353,9 +369,9 @@ export default function NewOrderPage() {
 
   // Debounced price fetcher
   const fetchPrice = useMemo(() => {
-    const debounce = (func, delay) => {
-      let timeout;
-      return (...args) => {
+    const debounce = (func: (...args: any[]) => void, delay: number) => {
+      let timeout: NodeJS.Timeout;
+      return (...args: any[]) => {
         clearTimeout(timeout);
         timeout = setTimeout(() => func(...args), delay);
       };
@@ -386,6 +402,21 @@ export default function NewOrderPage() {
 
     return debounce(getPrice, 300);
   }, [servicePrices]);
+
+  // Ensure TextVerified price loads when a service is selected
+  useEffect(() => {
+    const provider = providers.find((p) => p.id === selectedProvider);
+    const isTextVerified = provider?.name
+      ?.toLowerCase()
+      ?.includes("textverified");
+    if (isTextVerified && selectedService) {
+      const tvUsd = servicePrices[selectedService];
+      if (tvUsd === undefined) {
+        // Trigger debounced fetch for the selected service code
+        fetchPrice(selectedService);
+      }
+    }
+  }, [selectedProvider, selectedService, providers, servicePrices, fetchPrice]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -475,13 +506,29 @@ export default function NewOrderPage() {
   );
   const currentProvider = providers.find((p) => p.id === selectedProvider);
 
-  // Backend already applied full markup: (base × 1.20) + 2000 NGN
-  // Frontend only converts USD → NGN
-  const currentPriceUsd =
-    (currentService as any)?.prices?.[selectedProvider] ??
-    currentService?.price ??
-    0;
-  const currentPriceNgn = Math.round(currentPriceUsd * (usdToNgn || 0));
+  // Backend returns prices with full markup already applied
+  const isTextVerifiedCurrent = currentProvider?.name
+    ?.toLowerCase()
+    ?.includes("textverified");
+
+  let currentPriceNgn = 0;
+  let currentPriceUsd = 0;
+
+  if (isTextVerifiedCurrent) {
+    // TextVerified: Use NGN price directly from API (already includes markup)
+    const tvNgn = selectedService ? servicePrices[selectedService] : undefined;
+    currentPriceNgn = tvNgn && tvNgn > 0 ? tvNgn : 0;
+    currentPriceUsd =
+      currentPriceNgn > 0 && usdToNgn > 0 ? currentPriceNgn / usdToNgn : 0;
+  } else {
+    // SMS-Man: Convert USD to NGN
+    currentPriceUsd =
+      (currentService as any)?.prices?.[selectedProvider] ??
+      currentService?.price ??
+      0;
+    currentPriceNgn = Math.round(currentPriceUsd * (usdToNgn || 0));
+  }
+
   const insufficientBalance = currentService && balance < currentPriceNgn;
 
   // Virtualized row renderer for services list
@@ -525,7 +572,7 @@ export default function NewOrderPage() {
             {isLoadingPrice ? (
               <Spinner className="w-4 h-4" />
             ) : price && price > 0 ? (
-              <div className="font-mono text-sm">~${price.toFixed(2)}</div>
+              <div className="font-mono text-sm">₦{price.toLocaleString()}</div>
             ) : (
               <div className="text-xs text-muted-foreground">✅</div>
             )}

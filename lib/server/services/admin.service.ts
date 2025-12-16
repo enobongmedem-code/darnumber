@@ -183,7 +183,6 @@ export class AdminService {
         orderBy: { createdAt: "desc" },
         include: {
           user: { select: { id: true, email: true, userName: true } },
-          provider: { select: { name: true, displayName: true } },
         },
       }),
       prisma.order.count({ where }),
@@ -201,26 +200,39 @@ export class AdminService {
       if (startDate) where.createdAt.gte = startDate;
       if (endDate) where.createdAt.lte = endDate;
     }
-    const [totalOrders, ordersByStatus, ordersByProvider, revenue, profit] =
-      await Promise.all([
-        prisma.order.count({ where }),
-        prisma.order.groupBy({ by: ["status"], where, _count: true }),
-        prisma.order.groupBy({ by: ["providerId"], where, _count: true }),
-        prisma.order.aggregate({
-          where: { ...where, status: "COMPLETED" },
-          _sum: { finalPrice: true },
-        }),
-        prisma.order.aggregate({
-          where: { ...where, status: "COMPLETED" },
-          _sum: { profit: true },
-        }),
-      ]);
+    const [
+      totalOrders,
+      ordersByStatus,
+      ordersByProvider,
+      revenue,
+      completedOrders,
+    ] = await Promise.all([
+      prisma.order.count({ where }),
+      prisma.order.groupBy({ by: ["status"], where, _count: true }),
+      prisma.order.groupBy({ by: ["providerId"], where, _count: true }),
+      prisma.order.aggregate({
+        where: { ...where, status: "COMPLETED" },
+        _sum: { finalPrice: true },
+      }),
+      prisma.order.findMany({
+        where: { ...where, status: "COMPLETED" },
+        select: { finalPrice: true, cost: true },
+      }),
+    ]);
+
+    // Calculate total profit as sum of (finalPrice - cost) for completed orders
+    const totalProfit = completedOrders.reduce((sum, order) => {
+      const price = Number(order.finalPrice || 0);
+      const cost = Number(order.cost || 0);
+      return sum + (price - cost);
+    }, 0);
+
     return {
       totalOrders,
       ordersByStatus,
       ordersByProvider,
       totalRevenue: revenue._sum.finalPrice || 0,
-      totalProfit: profit._sum.profit || 0,
+      totalProfit,
     };
   }
 
@@ -233,7 +245,7 @@ export class AdminService {
       totalOrders,
       completedOrders,
       totalRevenue,
-      totalProfit,
+      recentCompletedOrders,
       activeUsers,
     ] = await Promise.all([
       prisma.user.count(),
@@ -246,12 +258,20 @@ export class AdminService {
         where: { status: "COMPLETED", createdAt: { gte: startDate } },
         _sum: { finalPrice: true },
       }),
-      prisma.order.aggregate({
+      prisma.order.findMany({
         where: { status: "COMPLETED", createdAt: { gte: startDate } },
-        _sum: { profit: true },
+        select: { finalPrice: true, cost: true },
       }),
       prisma.user.count({ where: { lastLoginAt: { gte: startDate } } }),
     ]);
+
+    // Calculate total profit as sum of (finalPrice - cost) for completed orders
+    const totalProfit = recentCompletedOrders.reduce((sum, order) => {
+      const price = Number(order.finalPrice || 0);
+      const cost = Number(order.cost || 0);
+      return sum + (price - cost);
+    }, 0);
+
     return {
       overview: {
         totalUsers,
@@ -259,7 +279,7 @@ export class AdminService {
         totalOrders,
         completedOrders,
         totalRevenue: totalRevenue._sum.finalPrice || 0,
-        totalProfit: totalProfit._sum.profit || 0,
+        totalProfit,
         activeUsers,
         conversionRate:
           totalOrders > 0
@@ -294,7 +314,7 @@ export class AdminService {
         rateLimit: true,
         config: true,
         _count: {
-          select: { services: true, orders: true, providerPrices: true },
+          select: { services: true, providerPrices: true },
         },
       },
     });

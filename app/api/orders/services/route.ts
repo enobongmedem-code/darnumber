@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   try {
     console.log("[Auth] Authenticating user...");
     const authResult = await requireAuth();
-    console.log(`[Auth] ✓ User ${authResult?.email} authenticated`);
+    console.log(`[Auth] ✓ User ${authResult?.user?.email} authenticated`);
 
     console.log("[Rates] Fetching exchange rates from cache/API...");
     const rubToUsdRate = await ExchangeRateService.getUsdToRubRate();

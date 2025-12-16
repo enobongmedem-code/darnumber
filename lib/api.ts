@@ -145,6 +145,7 @@ class ApiClient {
     serviceCode: string;
     country: string;
     provider?: string;
+    price: number;
   }) {
     console.log("API Client - Creating order:", data);
     const response = await this.client.post("/orders", data);
