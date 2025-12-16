@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { Card } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert } from "@/components/ui/alert";
 
-export default function VerifyPage() {
+function VerifyContent() {
   const sp = useSearchParams();
   const router = useRouter();
   const ref = sp.get("ref");
@@ -99,5 +99,19 @@ export default function VerifyPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Spinner />
+        </div>
+      }
+    >
+      <VerifyContent />
+    </Suspense>
   );
 }

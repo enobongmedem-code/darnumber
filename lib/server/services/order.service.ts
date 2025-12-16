@@ -952,21 +952,42 @@ export class TextVerifiedService {
         return [];
       }
 
-      // Return services without pricing data. Pricing will be fetched on-demand.
-      const services = servicesList.map((service: any) => ({
-        code: service.serviceName || service.name || service.id,
-        name: service.serviceName || service.name || `${service.id}`,
-        country: "US",
-        countryName: "United States",
-        price: 0, // Price will be fetched on demand
-        count: 100, // Placeholder
-        providerId: "textverified",
-        currency: "USD",
-        capability: service.capability || "sms",
-      }));
+      // Log first service to see available fields
+      if (servicesList.length > 0) {
+        console.log(
+          `[TextVerified] Sample service fields:`,
+          JSON.stringify(servicesList[0], null, 2)
+        );
+      }
 
+      // Return services with pricing data if available
+      const services = servicesList.map((service: any) => {
+        // Try to extract price from various possible field names
+        const price =
+          service.price ||
+          service.cost ||
+          service.minimumCost ||
+          service.minCost ||
+          service.verificationCost ||
+          0;
+
+        return {
+          code: service.serviceName || service.name || service.id,
+          name: service.serviceName || service.name || `${service.id}`,
+          country: "US",
+          countryName: "United States",
+          price: typeof price === "number" ? price : parseFloat(price) || 0,
+          count: 100, // Placeholder
+          providerId: "textverified",
+          currency: "USD",
+          capability: service.capability || "sms",
+        };
+      });
+
+      // Count services with pricing data
+      const servicesWithPrice = services.filter((s: any) => s.price > 0).length;
       console.log(
-        `\n[TextVerified] ✅ Successfully processed ${services.length} services (without pricing)`
+        `\n[TextVerified] ✅ Successfully processed ${services.length} services (${servicesWithPrice} with pricing)`
       );
       console.log("╚═══════════════════════════════════════════════╝\n");
 
@@ -1003,7 +1024,7 @@ export class TextVerifiedService {
 
     // 1. Check Redis cache first
     const cachedPrice = await redis.get(cacheKey);
-    if (cachedPrice && cachedPrice !== "-1") {
+    if (cachedPrice && cachedPrice !== "-1" && parseFloat(cachedPrice) > 0) {
       console.log(
         `[TextVerified][Cache] ✓ HIT for ${serviceName}: $${cachedPrice}`
       );
@@ -1012,28 +1033,42 @@ export class TextVerifiedService {
 
     console.log(`[TextVerified][Cache] ✗ MISS for ${serviceName}`);
 
-    /**
-     * TextVerified pricing API is complex and requires:
-     * - Carrier pricing option
-     * - Area code pricing option
-     * - Causes rate limiting (429) with frequent requests
-     *
-     * Solution: Use a default base price instead of fetching from API
-     * The actual price will be determined during order creation
-     */
+    // 2. Try to get price from the services list (which may have prices from API)
+    try {
+      const services = await this.getAvailableServices();
+      const service = services.find(
+        (s: any) =>
+          s.code === serviceName ||
+          s.name?.toLowerCase() === serviceName.toLowerCase()
+      );
+
+      if (service && service.price > 0) {
+        console.log(
+          `[TextVerified][Price] Found price from services list for ${serviceName}: $${service.price}`
+        );
+        await redis.set(cacheKey, service.price.toString(), 60 * 60 * 24);
+        return service.price;
+      }
+    } catch (e) {
+      console.warn(`[TextVerified][Price] Failed to get services list:`, e);
+    }
+
+    // 3. Fallback to default base price
+    // TextVerified minimum verification price is typically $0.50-$2.00 USD
+    const defaultPrice = 0.5; // Minimum base price in USD
 
     console.log(
-      `[TextVerified][Price] Using default base price for ${serviceName}`
+      `[TextVerified][Price] Using default base price for ${serviceName}: $${defaultPrice.toFixed(
+        2
+      )}`
     );
 
-    // This is just for display - actual pricing happens at order time
-    const defaultPrice = 0;
-
-    // Cache for 24 hours
-    await redis.set(cacheKey, defaultPrice.toString(), 60 * 60 * 24);
+    await redis.set(cacheKey, defaultPrice.toString(), 60 * 60 * 24); // Cache for 24 hours
 
     console.log(
-      `[TextVerified][Price] ✓ Cached default price for ${serviceName}: $${defaultPrice}`
+      `[TextVerified][Price] ✓ Cached price for ${serviceName}: $${defaultPrice.toFixed(
+        2
+      )}`
     );
 
     return defaultPrice;

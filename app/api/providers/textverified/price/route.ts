@@ -1,9 +1,13 @@
 import { NextRequest } from "next/server";
 import { json, error } from "@/lib/server/utils/response";
 import { TextVerifiedService } from "@/lib/server/services/order.service";
-import { prisma } from "@/lib/server/prisma";
+import { ExchangeRateService } from "@/lib/server/services/exchange-rate.service";
 
 export const runtime = "nodejs";
+
+// Same pricing markup as SMS-Man: 20% profit margin + 2000 NGN flat fee
+const MARKUP_PERCENTAGE = 0.2;
+const FLAT_FEE_NGN = 2000;
 
 /**
  * GET /api/providers/textverified/price
@@ -29,55 +33,23 @@ export async function GET(req: NextRequest) {
       return error("Price not found for this service", 404);
     }
 
-    // 2. Fetch active pricing rule to apply profit markup
-    const pricingRule = await prisma.pricingRule.findFirst({
-      where: {
-        isActive: true,
-        OR: [
-          { serviceCode: serviceName, country: "US" },
-          { serviceCode: serviceName, country: null },
-          { serviceCode: null, country: "US" },
-          { serviceCode: null, country: null },
-        ],
-      },
-      orderBy: { priority: "desc" },
-    });
+    // 2. Get exchange rate
+    const usdToNgn = await ExchangeRateService.getUsdToNgnRate();
 
-    let profit = 0;
-    if (pricingRule) {
-      if (pricingRule.profitType === "PERCENTAGE") {
-        profit = baseUsdPrice * (Number(pricingRule.profitValue) / 100);
-      } else {
-        // Fixed profit in NGN - convert to USD equivalent for calculation
-        profit = Number(pricingRule.profitValue) / 1600; // Rough USD equivalent
-      }
-    }
+    // 3. Apply same markup as SMS-Man: 20% + ₦2000 flat fee
+    const flatFeeUSD = FLAT_FEE_NGN / usdToNgn;
+    const finalUsdPrice = Number(
+      (baseUsdPrice * (1 + MARKUP_PERCENTAGE) + flatFeeUSD).toFixed(4)
+    );
+    const profitUsd = finalUsdPrice - baseUsdPrice;
 
-    const finalUsdPrice = baseUsdPrice + profit;
-
-    // 3. Convert to NGN using live exchange rate
-    let usdToNgn = 1600; // Fallback rate
-    try {
-      const rateRes = await fetch(
-        "https://openexchangerates.org/api/latest.json?app_id=5e1de33c06ec43ad8047ef4b9fc163c4",
-        { next: { revalidate: 3600 } } // Cache for 1 hour
-      );
-      if (rateRes.ok) {
-        const rateData = await rateRes.json();
-        usdToNgn = rateData?.rates?.NGN || 1600;
-      }
-    } catch (e) {
-      console.warn(
-        "[TextVerified][Price] Failed to fetch exchange rate, using fallback"
-      );
-    }
-
+    // 4. Convert to NGN
     const finalNgnPrice = Math.round(finalUsdPrice * usdToNgn);
 
     console.log(
       `[TextVerified][Price] ${serviceName}: Base $${baseUsdPrice.toFixed(
         2
-      )} + Profit $${profit.toFixed(2)} = $${finalUsdPrice.toFixed(
+      )} × 1.20 + ₦${FLAT_FEE_NGN} = $${finalUsdPrice.toFixed(
         2
       )} → ₦${finalNgnPrice.toLocaleString()}`
     );
@@ -88,7 +60,7 @@ export async function GET(req: NextRequest) {
         serviceName,
         price: finalNgnPrice, // Return NGN price
         baseUsd: baseUsdPrice,
-        profitUsd: profit,
+        profitUsd: profitUsd,
         finalUsd: finalUsdPrice,
       },
     });
