@@ -1026,7 +1026,6 @@ export class TextVerifiedService {
       `[TextVerified][Price] Using default base price for ${serviceName}`
     );
 
-    // Default base price: $0.50 USD
     // This is just for display - actual pricing happens at order time
     const defaultPrice = 0;
 
