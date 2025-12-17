@@ -470,6 +470,44 @@ class ApiClient {
     const response = await this.client.get("/admin/logs/system", { params });
     return response.data;
   }
+
+  // Admin Transactions
+  async getAdminTransactions(params?: {
+    page?: number;
+    limit?: number;
+    type?: string;
+    status?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  }) {
+    const response = await this.client.get("/admin/transactions", { params });
+    return response.data;
+  }
+
+  // Admin Wallets
+  async getAdminWallets(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    sortBy?: string;
+  }) {
+    const response = await this.client.get("/admin/wallets", { params });
+    return response.data;
+  }
+
+  // Admin Order Actions
+  async adminCancelOrder(orderId: string) {
+    const response = await this.client.post(`/admin/orders/${orderId}/cancel`);
+    return response.data;
+  }
+
+  async refundOrder(orderId: string, reason?: string) {
+    const response = await this.client.post(`/admin/orders/${orderId}/refund`, {
+      reason,
+    });
+    return response.data;
+  }
 }
 
 export const api = new ApiClient();

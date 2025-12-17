@@ -17,6 +17,7 @@ import {
   DollarSignIcon,
   PlusCircleIcon,
   PhoneCallIcon,
+  Zap,
 } from "lucide-react";
 import {
   SidebarProvider,
@@ -91,9 +92,34 @@ export default function DashboardLayout({
       icon: Shield,
     },
     {
-      name: "User Management",
+      name: "Users",
       href: "/admin/users",
       icon: User,
+    },
+    {
+      name: "Orders",
+      href: "/admin/orders",
+      icon: ShoppingCart,
+    },
+    {
+      name: "Transactions",
+      href: "/admin/transactions",
+      icon: DollarSignIcon,
+    },
+    {
+      name: "Wallets",
+      href: "/admin/wallets",
+      icon: Wallet,
+    },
+    {
+      name: "Providers",
+      href: "/admin/providers",
+      icon: Zap,
+    },
+    {
+      name: "Settings",
+      href: "/admin/settings",
+      icon: Settings,
     },
   ];
 
