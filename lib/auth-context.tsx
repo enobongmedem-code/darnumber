@@ -22,6 +22,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const publicRoutes = [
+  "/", // Allow landing page
   "/login",
   "/signup",
   "/forget-password",
