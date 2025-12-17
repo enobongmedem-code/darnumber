@@ -33,7 +33,7 @@ import { FaXTwitter } from "react-icons/fa6";
 import { WhatsAppVerification } from "@/components/WhatsAppVerification";
 import { NumberSelectionAnimation } from "@/components/NumberSelectionAnimation";
 import { DashboardAnimation } from "@/components/DashboardAnimation";
-
+import NavBar from "@/components/Navbar";
 const features = [
   {
     icon: Shield,
@@ -134,107 +134,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
-      <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-lg border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-linear-to-br from-primary to-primary/80 rounded-xl flex items-center justify-center">
-                <MessageSquare className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold text-foreground">
-                DarNumber
-              </span>
-            </Link>
-
-            {/* Desktop Nav */}
-            <div className="hidden md:flex items-center gap-8">
-              <a
-                href="#features"
-                className="text-muted-foreground hover:text-foreground transition"
-              >
-                Features
-              </a>
-              <a
-                href="#how-it-works"
-                className="text-muted-foreground hover:text-foreground transition"
-              >
-                How it Works
-              </a>
-              <a
-                href="#pricing"
-                className="text-muted-foreground hover:text-foreground transition"
-              >
-                Pricing
-              </a>
-              <a
-                href="#services"
-                className="text-muted-foreground hover:text-foreground transition"
-              >
-                Services
-              </a>
-            </div>
-
-            <div className="hidden md:flex items-center gap-3">
-              <Button variant="ghost">Log in</Button>
-              <Button>Get Started</Button>
-            </div>
-
-            <button
-              className="md:hidden p-2"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? (
-                <X className="w-6 h-6" />
-              ) : (
-                <Menu className="w-6 h-6" />
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile menu */}
-        {mobileMenuOpen && (
-          <div className="md:hidden bg-background border-t">
-            <div className="px-4 py-4 space-y-3">
-              <a
-                href="#features"
-                className="block px-3 py-2 text-muted-foreground hover:text-foreground"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Features
-              </a>
-              <a
-                href="#how-it-works"
-                className="block px-3 py-2 text-muted-foreground hover:text-foreground"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                How it Works
-              </a>
-              <a
-                href="#pricing"
-                className="block px-3 py-2 text-muted-foreground hover:text-foreground"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Pricing
-              </a>
-              <a
-                href="#services"
-                className="block px-3 py-2 text-muted-foreground hover:text-foreground"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Services
-              </a>
-              <div className="pt-4 space-y-2 border-t">
-                <Button variant="outline" className="w-full">
-                  Log in
-                </Button>
-                <Button className="w-full">Get Started</Button>
-              </div>
-            </div>
-          </div>
-        )}
-      </nav>
-
+      <NavBar />
       {/* Hero Section */}
       <section
         className="relative overflow-hidden"
