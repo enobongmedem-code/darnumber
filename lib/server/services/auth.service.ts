@@ -55,6 +55,19 @@ export async function verifyUserCredentials(
     },
   });
   if (!user || !user.password) return null;
+
+  // Check if user is suspended or banned
+  if (user.status === "SUSPENDED") {
+    throw new Error(
+      "Your account has been suspended. Please contact support for assistance."
+    );
+  }
+  if (user.status === "BANNED") {
+    throw new Error(
+      "Your account has been banned. Please contact support for assistance."
+    );
+  }
+
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) return null;
   return toSafeUser(user);
