@@ -3,6 +3,9 @@ import { prisma } from "@/lib/server/prisma";
 
 // Parse SQL INSERT statements from the uploaded file
 function parseInsertStatements(sqlContent: string) {
+  console.log("🔍 Starting SQL parsing...");
+  console.log(`📄 SQL content length: ${sqlContent.length} characters`);
+
   const users: any[] = [];
 
   // Match INSERT INTO statements with VALUES
@@ -10,11 +13,16 @@ function parseInsertStatements(sqlContent: string) {
     /INSERT INTO `users`[^(]*\([^)]+\)\s+VALUES\s*([\s\S]+?);/g;
   const matches = Array.from(sqlContent.matchAll(insertRegex));
 
+  console.log(`✅ Found ${matches.length} INSERT statements`);
+
   for (const match of matches) {
     const valuesSection = match[1];
 
     // Split by ),( to get individual user records
     const userRecords = valuesSection.split(/\),\s*\(/);
+    console.log(
+      `📦 Processing ${userRecords.length} user records from this INSERT statement`
+    );
 
     for (let record of userRecords) {
       // Clean up the record
@@ -80,9 +88,14 @@ function parseInsertStatements(sqlContent: string) {
         const userName = values[1] || "";
 
         // Skip if essential fields are missing
-        if (!email || !userName) continue;
+        if (!email || !userName) {
+          console.log(
+            `⚠️ Skipping record - missing essential fields (email: ${email}, userName: ${userName})`
+          );
+          continue;
+        }
 
-        users.push({
+        const userData = {
           email,
           phone: phone || null,
           userName,
@@ -99,36 +112,59 @@ function parseInsertStatements(sqlContent: string) {
           phoneVerified: false,
           status: "ACTIVE",
           role: "USER",
-        });
+        };
+
+        console.log(
+          `👤 Parsed user: ${email} (${userName}) - Balance: ${userData.balance} ${userData.currency}`
+        );
+        users.push(userData);
       }
     }
   }
 
+  console.log(`✅ Parsing complete. Total valid users: ${users.length}`);
   return users;
 }
 
 export async function POST(request: NextRequest) {
+  console.log("\n🚀 ========== MIGRATION REQUEST STARTED ==========");
+  const startTime = Date.now();
+
   try {
     // Get the uploaded file
+    console.log("📥 Receiving file upload...");
     const formData = await request.formData();
     const file = formData.get("file") as File;
 
     if (!file) {
+      console.log("❌ No file uploaded");
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
+    console.log(
+      `📁 File received: ${file.name} (${file.size} bytes, ${file.type})`
+    );
+
     // Read the file content
+    console.log("📖 Reading file content...");
     const content = await file.text();
+    console.log(`✅ File content read successfully`);
 
     // Parse the SQL file
+    console.log("\n🔧 Starting SQL parsing...");
     const users = parseInsertStatements(content);
 
     if (users.length === 0) {
+      console.log("❌ No valid user data found in the file");
       return NextResponse.json(
         { error: "No valid user data found in the file" },
         { status: 400 }
       );
     }
+
+    console.log(
+      `\n💾 Starting database migration for ${users.length} users...`
+    );
 
     // Migrate users to database
     let migratedCount = 0;
@@ -137,12 +173,15 @@ export async function POST(request: NextRequest) {
 
     for (const userData of users) {
       try {
+        console.log(`\n🔍 Checking user: ${userData.email}`);
+
         // Check if user already exists
         const existingUser = await prisma.user.findUnique({
           where: { email: userData.email },
         });
 
         if (existingUser) {
+          console.log(`⏭️ User already exists, skipping: ${userData.email}`);
           skippedCount++;
           continue;
         }
@@ -153,6 +192,10 @@ export async function POST(request: NextRequest) {
           .substring(2, 7)
           .toUpperCase()}`;
 
+        console.log(
+          `➕ Creating user: ${userData.email} with referral code: ${referralCode}`
+        );
+
         // Create the user
         await prisma.user.create({
           data: {
@@ -161,9 +204,10 @@ export async function POST(request: NextRequest) {
           },
         });
 
+        console.log(`✅ Successfully created user: ${userData.email}`);
         migratedCount++;
       } catch (error) {
-        console.error(`Error migrating user ${userData.email}:`, error);
+        console.error(`❌ Error migrating user ${userData.email}:`, error);
         errors.push(
           `Failed to migrate ${userData.email}: ${
             error instanceof Error ? error.message : "Unknown error"
@@ -172,16 +216,31 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    console.log("\n📊 ========== MIGRATION SUMMARY ==========");
+    console.log(`✅ Successfully migrated: ${migratedCount} users`);
+    console.log(`⏭️ Skipped (already exist): ${skippedCount} users`);
+    console.log(`❌ Failed: ${errors.length} users`);
+    console.log(
+      `⏱️ Total time: ${((Date.now() - startTime) / 1000).toFixed(2)}s`
+    );
+    console.log("========================================\n");
+
+    const response = {
       success: true,
       message: `Migration completed. ${migratedCount} users migrated, ${skippedCount} skipped (already exist).`,
       migratedCount,
       skippedCount,
       totalProcessed: users.length,
       errors: errors.length > 0 ? errors : undefined,
-    });
+    };
+
+    console.log("🎉 Migration completed successfully!");
+    return NextResponse.json(response);
   } catch (error) {
-    console.error("Migration error:", error);
+    console.error("\n💥 ========== MIGRATION ERROR ==========");
+    console.error("Migration failed with error:", error);
+    console.error("======================================\n");
+
     return NextResponse.json(
       {
         error: "Migration failed",
