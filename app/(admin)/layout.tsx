@@ -91,7 +91,7 @@ function AdminSidebarContent({
 
   return (
     <>
-      <div className="p-6 border-b bg-linear-to-r from-purple-600 to-indigo-600">
+      <div className="p-6 border-b bg-linear-to-r from-indigo-600 to-indigo-600">
         <div className="flex items-center gap-2">
           <Shield className="w-6 h-6 text-white" />
           <h1 className="text-xl font-bold text-white">Admin Panel</h1>
