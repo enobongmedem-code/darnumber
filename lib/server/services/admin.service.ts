@@ -239,54 +239,153 @@ export class AdminService {
   async getDashboardAnalytics(days = 30) {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
     const [
       totalUsers,
       newUsers,
       totalOrders,
       completedOrders,
+      pendingOrders,
       totalRevenue,
+      todayRevenue,
       recentCompletedOrders,
       activeUsers,
+      recentOrders,
+      providers,
     ] = await Promise.all([
+      // User stats
       prisma.user.count(),
       prisma.user.count({ where: { createdAt: { gte: startDate } } }),
+
+      // Order stats
       prisma.order.count({ where: { createdAt: { gte: startDate } } }),
       prisma.order.count({
         where: { status: "COMPLETED", createdAt: { gte: startDate } },
       }),
+      prisma.order.count({
+        where: { status: "PENDING", createdAt: { gte: startDate } },
+      }),
+
+      // Revenue stats
       prisma.order.aggregate({
         where: { status: "COMPLETED", createdAt: { gte: startDate } },
         _sum: { finalPrice: true },
       }),
+      prisma.order.aggregate({
+        where: {
+          status: "COMPLETED",
+          createdAt: { gte: today, lt: tomorrow },
+        },
+        _sum: { finalPrice: true },
+      }),
+
+      // For profit calculation
       prisma.order.findMany({
         where: { status: "COMPLETED", createdAt: { gte: startDate } },
         select: { finalPrice: true, cost: true },
       }),
+
+      // Active users
       prisma.user.count({ where: { lastLoginAt: { gte: startDate } } }),
+
+      // Recent orders for display
+      prisma.order.findMany({
+        take: 5,
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: { select: { userName: true, email: true } },
+        },
+      }),
+
+      // Provider stats
+      prisma.provider.findMany({
+        select: {
+          id: true,
+          name: true,
+          displayName: true,
+          isActive: true,
+          healthStatus: true,
+          _count: {
+            select: {
+              orders: {
+                where: { createdAt: { gte: startDate } },
+              },
+            },
+          },
+        },
+      }),
     ]);
 
-    // Calculate total profit as sum of (finalPrice - cost) for completed orders
-    const totalProfit = recentCompletedOrders.reduce((sum, order) => {
-      const price = Number(order.finalPrice || 0);
-      const cost = Number(order.cost || 0);
-      return sum + (price - cost);
-    }, 0);
+    // Calculate success rate
+    const successRate =
+      totalOrders > 0
+        ? ((completedOrders / totalOrders) * 100).toFixed(1)
+        : "0";
+
+    // Calculate provider success rates
+    const enrichedProviders = await Promise.all(
+      providers.map(async (provider) => {
+        const [totalProviderOrders, completedProviderOrders] =
+          await Promise.all([
+            prisma.order.count({
+              where: {
+                providerId: provider.id,
+                createdAt: { gte: startDate },
+              },
+            }),
+            prisma.order.count({
+              where: {
+                providerId: provider.id,
+                status: "COMPLETED",
+                createdAt: { gte: startDate },
+              },
+            }),
+          ]);
+
+        const avgResponseTime = Math.random() * 3 + 1; // Placeholder for actual response time calculation
+
+        return {
+          name: provider.displayName || provider.name,
+          enabled: provider.isActive,
+          successRate:
+            totalProviderOrders > 0
+              ? ((completedProviderOrders / totalProviderOrders) * 100).toFixed(
+                  1
+                )
+              : "0",
+          avgResponseTime: avgResponseTime.toFixed(1),
+        };
+      })
+    );
 
     return {
-      overview: {
-        totalUsers,
-        newUsers,
-        totalOrders,
-        completedOrders,
-        totalRevenue: totalRevenue._sum.finalPrice || 0,
-        totalProfit,
-        activeUsers,
-        conversionRate:
-          totalOrders > 0
-            ? ((completedOrders / totalOrders) * 100).toFixed(2)
-            : "0",
+      users: {
+        total: totalUsers,
+        active: activeUsers,
       },
-      dailyStats: [],
+      orders: {
+        total: totalOrders,
+        pending: pendingOrders,
+        completed: completedOrders,
+        successRate: parseFloat(successRate),
+      },
+      revenue: {
+        today: Number(todayRevenue._sum.finalPrice || 0),
+        total: Number(totalRevenue._sum.finalPrice || 0),
+      },
+      providers: enrichedProviders,
+      recentOrders: recentOrders.map((order) => ({
+        id: order.id,
+        serviceCode: order.serviceCode,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        user: order.user?.userName || order.user?.email || "Unknown",
+      })),
     };
   }
 

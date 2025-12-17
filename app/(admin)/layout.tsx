@@ -243,7 +243,7 @@ export default function AdminLayout({
   return (
     <SidebarProvider>
       <div className="flex h-screen w-full bg-gray-100">
-        <Sidebar className="border-r bg-white w-72">
+        <Sidebar className="border-r bg-white w-72 shrink-0">
           <SidebarContent className="flex flex-col h-full">
             <AdminSidebarContent
               pathname={pathname}
@@ -255,7 +255,7 @@ export default function AdminLayout({
           </SidebarContent>
         </Sidebar>
 
-        <SidebarInset className="flex-1">
+        <SidebarInset className="flex-1 min-w-0">
           <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-white px-4">
             <SidebarTrigger />
             <Separator orientation="vertical" className="h-6" />
@@ -269,7 +269,7 @@ export default function AdminLayout({
               </span>
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto">{children}</main>
+          <main className="flex-1 overflow-y-auto p-6">{children}</main>
         </SidebarInset>
       </div>
     </SidebarProvider>

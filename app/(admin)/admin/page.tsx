@@ -46,7 +46,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="space-y-6">
       <h1 className="text-3xl font-bold">Admin Dashboard</h1>
 
       {/* Key Metrics */}
@@ -68,10 +68,10 @@ export default function AdminDashboard() {
         <Card className="p-6">
           <p className="text-sm text-muted-foreground">Revenue (Today)</p>
           <p className="text-3xl font-bold">
-            ${stats?.revenue?.today.toFixed(2) || "0.00"}
+            ${stats?.revenue?.today?.toFixed(2) || "0.00"}
           </p>
           <p className="text-sm text-muted-foreground">
-            ${stats?.revenue?.total.toFixed(2) || "0.00"} total
+            ${stats?.revenue?.total?.toFixed(2) || "0.00"} total
           </p>
         </Card>
         <Card className="p-6">
