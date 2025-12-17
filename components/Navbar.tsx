@@ -68,10 +68,24 @@ const Navbar = () => {
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center gap-3">
-            <Button variant="ghost" size="sm" className="rounded-full">
+            <Button
+              variant="ghost"
+              size="lg"
+              className=""
+              onClick={() => {
+                window.location.href = "/login";
+              }}
+            >
               Log in
             </Button>
-            <Button size="sm" className="rounded-full px-5">
+            <Button
+              size="lg"
+              className=" px-5"
+              variant="default"
+              onClick={() => {
+                window.location.href = "/login";
+              }}
+            >
               Get Started
             </Button>
           </div>
