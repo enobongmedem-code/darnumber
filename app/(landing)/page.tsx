@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,20 @@ import {
   ArrowRight,
   MessageCircle,
 } from "lucide-react";
+import {
+  SiWhatsapp,
+  SiTelegram,
+  SiGoogle,
+  SiFacebook,
+  SiX,
+  SiInstagram,
+  SiTiktok,
+  SiDiscord,
+  SiNetflix,
+  SiUber,
+  SiAmazon,
+  SiPaypal,
+} from "react-icons/si";
 
 export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -51,61 +65,21 @@ export default function LandingPage() {
   ];
 
   const services = [
-    { name: "WhatsApp", icon: "💬", popular: true },
-    { name: "Telegram", icon: "✈️", popular: true },
-    { name: "Google", icon: "🔍", popular: true },
-    { name: "Facebook", icon: "📘", popular: false },
-    { name: "Twitter/X", icon: "🐦", popular: false },
-    { name: "Instagram", icon: "📷", popular: false },
-    { name: "TikTok", icon: "🎵", popular: false },
-    { name: "Discord", icon: "🎮", popular: false },
-    { name: "Netflix", icon: "🎬", popular: false },
-    { name: "Uber", icon: "🚗", popular: false },
-    { name: "Amazon", icon: "📦", popular: false },
-    { name: "PayPal", icon: "💳", popular: false },
+    { name: "WhatsApp", Icon: SiWhatsapp, color: "#25D366", popular: true },
+    { name: "Telegram", Icon: SiTelegram, color: "#26A5E4", popular: true },
+    { name: "Google", Icon: SiGoogle, color: "#4285F4", popular: true },
+    { name: "Facebook", Icon: SiFacebook, color: "#1877F2", popular: false },
+    { name: "X (Twitter)", Icon: SiX, color: "#000000", popular: false },
+    { name: "Instagram", Icon: SiInstagram, color: "#E4405F", popular: false },
+    { name: "TikTok", Icon: SiTiktok, color: "#010101", popular: false },
+    { name: "Discord", Icon: SiDiscord, color: "#5865F2", popular: false },
+    { name: "Netflix", Icon: SiNetflix, color: "#E50914", popular: false },
+    { name: "Uber", Icon: SiUber, color: "#000000", popular: false },
+    { name: "Amazon", Icon: SiAmazon, color: "#FF9900", popular: false },
+    { name: "PayPal", Icon: SiPaypal, color: "#003087", popular: false },
   ];
 
-  const pricingPlans = [
-    {
-      name: "Starter",
-      price: "₦500",
-      description: "Perfect for occasional use",
-      features: [
-        "5 SMS verifications",
-        "10+ countries available",
-        "Standard support",
-        "24-hour number access",
-      ],
-      popular: false,
-    },
-    {
-      name: "Pro",
-      price: "₦2,000",
-      description: "Best for regular users",
-      features: [
-        "25 SMS verifications",
-        "30+ countries available",
-        "Priority support",
-        "Extended number access",
-        "Bulk discounts",
-      ],
-      popular: true,
-    },
-    {
-      name: "Business",
-      price: "₦5,000",
-      description: "For teams & businesses",
-      features: [
-        "75 SMS verifications",
-        "50+ countries available",
-        "Dedicated support",
-        "API access",
-        "Custom pricing",
-        "Team management",
-      ],
-      popular: false,
-    },
-  ];
+  // pricing removed by request
 
   const steps = [
     {
@@ -158,6 +132,24 @@ export default function LandingPage() {
     { value: "99.9%", label: "Delivery Rate" },
     { value: "24/7", label: "Customer Support" },
   ];
+
+  // Hero verification animation state
+  const targetCode = "482916";
+  const [enteredCode, setEnteredCode] = useState("");
+  const [verified, setVerified] = useState(false);
+  useEffect(() => {
+    let i = 0;
+    const typeTimer = setInterval(() => {
+      setEnteredCode((prev) => prev + targetCode[i]);
+      i += 1;
+      if (i >= targetCode.length) {
+        clearInterval(typeTimer);
+        setTimeout(() => setVerified(true), 800);
+      }
+    }, 350);
+    return () => clearInterval(typeTimer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen bg-white">
@@ -295,8 +287,8 @@ export default function LandingPage() {
               </h1>
               <p className="text-lg md:text-xl text-gray-600 mb-8 max-w-xl mx-auto lg:mx-0">
                 Get virtual phone numbers for SMS verification. Works with
-                WhatsApp, Telegram, Google, and 100+ other services. Fast,
-                secure, and affordable.
+                WhatsApp, Telegram, Google, and 7,500+ services. Fast, secure,
+                and affordable.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Link href="/signup">
@@ -330,7 +322,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="relative">
-              <div className="relative z-10 bg-white rounded-2xl shadow-2xl p-6 md:p-8 mx-auto max-w-md">
+              <div className="relative z-10 bg-white rounded-2xl shadow-2xl p-6 md:p-8 mx-auto max-w-md border border-blue-100">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
@@ -346,24 +338,43 @@ export default function LandingPage() {
                   <Badge className="bg-green-100 text-green-700">Active</Badge>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <p className="text-sm text-gray-500 mb-2">
+                  <p className="text-sm text-gray-500 mb-3">
                     Your verification code:
                   </p>
-                  <div className="flex gap-2 justify-center">
-                    {["4", "8", "2", "9", "1", "6"].map((digit, i) => (
-                      <div
-                        key={i}
-                        className="w-10 h-12 bg-white rounded-lg border-2 border-blue-200 flex items-center justify-center text-xl font-bold text-blue-600"
-                      >
-                        {digit}
-                      </div>
-                    ))}
+                  <div className="flex gap-2 justify-center" aria-live="polite">
+                    {Array.from({ length: targetCode.length }).map((_, i) => {
+                      const isFilled = i < enteredCode.length;
+                      const char = isFilled ? enteredCode[i] : "";
+                      return (
+                        <div
+                          key={i}
+                          className={`w-10 h-12 rounded-lg border-2 flex items-center justify-center text-xl font-bold transition-all duration-300 ${
+                            isFilled
+                              ? "bg-blue-50 border-blue-400 text-blue-700 scale-105"
+                              : "bg-white border-blue-200 text-blue-600"
+                          }`}
+                        >
+                          {char}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Received 2 seconds ago</span>
-                  <span className="text-green-600 font-medium">✓ Verified</span>
-                </div>
+                {!verified ? (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Receiving SMS…</span>
+                    <span className="text-blue-600 font-medium animate-pulse">
+                      Processing
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Received just now</span>
+                    <span className="text-green-600 font-semibold flex items-center gap-1">
+                      <Check className="w-4 h-4" /> Verified
+                    </span>
+                  </div>
+                )}
               </div>
               {/* Decorative elements */}
               <div className="absolute top-0 right-0 -translate-y-1/4 translate-x-1/4 w-72 h-72 bg-purple-200 rounded-full blur-3xl opacity-40"></div>
@@ -476,100 +487,103 @@ export default function LandingPage() {
               Works with Your Favorite Apps
             </h2>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Verify accounts on 100+ platforms and services. New services added
-              weekly.
+              Verify accounts on 7,500+ platforms and services. New services
+              added weekly.
             </p>
           </div>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
-            {services.map((service, i) => (
-              <div
-                key={i}
-                className="relative bg-white rounded-xl p-4 text-center border hover:shadow-md transition-shadow cursor-pointer group"
-              >
-                {service.popular && (
-                  <div className="absolute -top-2 -right-2 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
-                    <Star className="w-3 h-3 text-white fill-white" />
+            {services.map((service, i) => {
+              const Icon = service.Icon as any;
+              return (
+                <div
+                  key={i}
+                  className="relative bg-white rounded-xl p-4 text-center border hover:shadow-md transition-shadow cursor-pointer group"
+                >
+                  {service.popular && (
+                    <div className="absolute -top-2 -right-2 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
+                      <Star className="w-3 h-3 text-white fill-white" />
+                    </div>
+                  )}
+                  <div className="mb-2 flex items-center justify-center">
+                    <Icon size={28} style={{ color: service.color }} />
                   </div>
-                )}
-                <div className="text-3xl mb-2">{service.icon}</div>
-                <p className="text-sm font-medium text-gray-700 group-hover:text-blue-600 transition-colors">
-                  {service.name}
-                </p>
-              </div>
-            ))}
+                  <p className="text-sm font-medium text-gray-700 group-hover:text-blue-600 transition-colors">
+                    {service.name}
+                  </p>
+                </div>
+              );
+            })}
           </div>
           <p className="text-center text-gray-500 mt-8">
-            And 100+ more services...
+            And 7,500+ more services…
           </p>
         </div>
       </section>
 
-      {/* Pricing Section */}
-      <section id="pricing" className="py-20 md:py-28 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <Badge className="mb-4 bg-blue-100 text-blue-700">Pricing</Badge>
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Simple, Transparent Pricing
-            </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Pay only for what you use. No hidden fees, no subscriptions
-              required.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {pricingPlans.map((plan, i) => (
-              <Card
-                key={i}
-                className={`relative p-8 ${
-                  plan.popular
-                    ? "border-2 border-blue-600 shadow-xl scale-105"
-                    : "border shadow-sm"
-                }`}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-blue-600 text-white px-4 py-1">
-                      Most Popular
-                    </Badge>
-                  </div>
-                )}
-                <div className="text-center mb-6">
-                  <h3 className="text-xl font-semibold text-gray-900">
-                    {plan.name}
-                  </h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {plan.description}
-                  </p>
-                  <div className="mt-4">
-                    <span className="text-4xl font-bold text-gray-900">
-                      {plan.price}
-                    </span>
-                  </div>
-                </div>
-                <ul className="space-y-3 mb-8">
-                  {plan.features.map((feature, j) => (
-                    <li key={j} className="flex items-center gap-3">
-                      <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
-                      <span className="text-gray-600">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Link href="/signup" className="block">
-                  <Button
-                    className={`w-full ${
-                      plan.popular ? "bg-blue-600 hover:bg-blue-700" : ""
-                    }`}
-                    variant={plan.popular ? "default" : "outline"}
-                  >
-                    Get Started
+      {/* Showcase Section (alternating image/text) */}
+      <section className="py-20 md:py-28 bg-gradient-to-b from-gray-50 to-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+          <div className="grid md:grid-cols-2 gap-8 items-center">
+            <div className="order-1 md:order-none">
+              <div className="w-full aspect-[16/10] rounded-2xl bg-gradient-to-br from-blue-100 via-white to-purple-100 border flex items-center justify-center text-sm text-gray-500">
+                Add your image here
+              </div>
+            </div>
+            <div>
+              <Badge className="mb-4 bg-blue-100 text-blue-700">
+                Simple & Fast
+              </Badge>
+              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
+                Get numbers in seconds
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Reserve a number from your preferred country, use it instantly,
+                and receive your code with industry-leading delivery speed.
+              </p>
+              <div className="flex gap-3">
+                <Link href="/signup">
+                  <Button className="bg-blue-600 hover:bg-blue-700">
+                    Create Account
                   </Button>
                 </Link>
-              </Card>
-            ))}
+                <Link href="#how-it-works">
+                  <Button variant="outline">How it works</Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-8 items-center">
+            <div className="md:order-2">
+              <div className="w-full aspect-[16/10] rounded-2xl bg-gradient-to-br from-emerald-100 via-white to-blue-100 border flex items-center justify-center text-sm text-gray-500">
+                Add your image here
+              </div>
+            </div>
+            <div className="md:order-1">
+              <Badge className="mb-4 bg-emerald-100 text-emerald-700">
+                Modern & Flexible
+              </Badge>
+              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
+                Designed for real workflows
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Clean, minimal UI with delightful interactions. Optimized for
+                speed, clarity, and accessibility across devices.
+              </p>
+              <div className="flex gap-3">
+                <Link href="/dashboard">
+                  <Button variant="secondary">Explore Dashboard</Button>
+                </Link>
+                <Link href="/contact">
+                  <Button variant="outline">Talk to sales</Button>
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </section>
+
+      {/* Pricing Section removed by request */}
 
       {/* Testimonials Section */}
       <section className="py-20 md:py-28">
