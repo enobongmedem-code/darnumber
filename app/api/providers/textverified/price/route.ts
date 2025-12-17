@@ -2,16 +2,13 @@ import { NextRequest } from "next/server";
 import { json, error } from "@/lib/server/utils/response";
 import { TextVerifiedService } from "@/lib/server/services/order.service";
 import { ExchangeRateService } from "@/lib/server/services/exchange-rate.service";
+import { PricingService } from "@/lib/server/services/pricing.service";
 
 export const runtime = "nodejs";
 
-// Same pricing markup as SMS-Man: 20% profit margin + 2000 NGN flat fee
-const MARKUP_PERCENTAGE = 0.2;
-const FLAT_FEE_NGN = 2000;
-
 /**
  * GET /api/providers/textverified/price
- * Fetches the price for a single TextVerified service with profit markup applied, returned in NGN.
+ * Fetches the price for a single TextVerified service with admin-configured profit markup applied, returned in NGN.
  * @param {NextRequest} req - serviceName: string
  */
 export async function GET(req: NextRequest) {
@@ -36,12 +33,15 @@ export async function GET(req: NextRequest) {
     // 2. Get exchange rate
     const usdToNgn = await ExchangeRateService.getUsdToNgnRate();
 
-    // 3. Apply same markup as SMS-Man: 20% + ₦2000 flat fee
-    const flatFeeUSD = FLAT_FEE_NGN / usdToNgn;
-    const finalUsdPrice = Number(
-      (baseUsdPrice * (1 + MARKUP_PERCENTAGE) + flatFeeUSD).toFixed(4)
+    // 3. Apply admin pricing rules (TextVerified is always US)
+    const pricingResult = await PricingService.calculatePrice(
+      baseUsdPrice,
+      serviceName,
+      "US"
     );
-    const profitUsd = finalUsdPrice - baseUsdPrice;
+
+    const finalUsdPrice = pricingResult.finalPrice;
+    const profitUsd = pricingResult.profit;
 
     // 4. Convert to NGN
     const finalNgnPrice = Math.round(finalUsdPrice * usdToNgn);
@@ -49,9 +49,16 @@ export async function GET(req: NextRequest) {
     console.log(
       `[TextVerified][Price] ${serviceName}: Base $${baseUsdPrice.toFixed(
         2
-      )} × 1.20 + ₦${FLAT_FEE_NGN} = $${finalUsdPrice.toFixed(
+      )} + profit $${profitUsd.toFixed(2)} = $${finalUsdPrice.toFixed(
         2
-      )} → ₦${finalNgnPrice.toLocaleString()}`
+      )} → ₦${finalNgnPrice.toLocaleString()}`,
+      pricingResult.ruleApplied
+        ? `(Rule: ${pricingResult.ruleApplied.profitType} ${
+            pricingResult.ruleApplied.profitValue
+          }${
+            pricingResult.ruleApplied.profitType === "PERCENTAGE" ? "%" : " USD"
+          })`
+        : "(Default 20% markup)"
     );
 
     return json({
@@ -62,6 +69,7 @@ export async function GET(req: NextRequest) {
         baseUsd: baseUsdPrice,
         profitUsd: profitUsd,
         finalUsd: finalUsdPrice,
+        ruleApplied: pricingResult.ruleApplied,
       },
     });
   } catch (e) {

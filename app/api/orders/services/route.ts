@@ -7,12 +7,9 @@ import {
   TextVerifiedService,
 } from "@/lib/server/services/order.service";
 import { ExchangeRateService } from "@/lib/server/services/exchange-rate.service";
+import { PricingService } from "@/lib/server/services/pricing.service";
 
 export const runtime = "nodejs";
-
-// Pricing markup: 20% profit margin + 2000 NGN flat fee
-const MARKUP_PERCENTAGE = 0.2;
-const FLAT_FEE_NGN = 2000;
 
 export async function GET(req: NextRequest) {
   console.log("\n╔════════════════════════════════════════════════╗");
@@ -101,87 +98,112 @@ export async function GET(req: NextRequest) {
       }`
     );
 
-    // Process SMS-Man services: convert RUB → USD → apply markup (20% + 2000 NGN)
+    // Collect all services for batch pricing calculation using admin rules
+    const servicesToPrice: Array<{
+      basePrice: number;
+      serviceCode: string;
+      country: string;
+    }> = [];
+    const serviceMetadata: Array<{
+      key: string;
+      providerData: any;
+      providerId: string;
+      providerName: string;
+    }> = [];
+
+    // Process SMS-Man services: convert RUB to USD base price
     console.log(
-      "[Processing] Converting SMS-Man RUB prices to USD with full markup..."
+      "[Processing] Collecting SMS-Man base prices for admin pricing rules..."
     );
     smsManServices.forEach((service: any, idx: number) => {
-      const key = `${service.code}-${service.country}`;
       const priceRUB = service.price; // SMS-Man returns prices in Russian Rubles
       const baseUSD = Number((priceRUB / rubToUsdRate).toFixed(4));
-      const flatFeeUSD = FLAT_FEE_NGN / usdToNgnRate;
-      const priceUSD = Number(
-        (baseUSD * (1 + MARKUP_PERCENTAGE) + flatFeeUSD).toFixed(2)
-      );
 
       if (idx === 0) {
         console.log(
-          `[SMSMan] Sample: ${priceRUB} RUB (provider) → ${baseUSD} USD → ${priceUSD} USD (×1.20 + ₦${FLAT_FEE_NGN})`
+          `[SMSMan] Sample base: ${priceRUB} RUB (provider) → ${baseUSD} USD (before admin markup)`
         );
       }
 
-      if (!servicesMap.has(key)) {
-        servicesMap.set(key, {
-          code: service.code,
-          name: service.name,
-          country: service.country,
-          price: priceUSD,
-          prices: { [PROVIDERS.LION.id]: priceUSD },
-          currency: "USD",
-          providerId: "sms-man",
-          ui: {
-            logo: "📱",
-            color: "bg-gray-200",
-            displayName: service.name,
-          },
-          providers: [
-            {
-              id: PROVIDERS.LION.id,
-              name: "sms-man",
-              displayName: PROVIDERS.LION.displayName,
-            },
-          ],
-        });
-      } else {
-        const existing = servicesMap.get(key);
-        existing.prices = existing.prices || {};
-        existing.prices[PROVIDERS.LION.id] = priceUSD;
-        if (!existing.providers.find((p: any) => p.id === PROVIDERS.LION.id)) {
-          existing.providers.push({
-            id: PROVIDERS.LION.id,
-            name: "sms-man",
-            displayName: PROVIDERS.LION.displayName,
-          });
-        }
-      }
+      servicesToPrice.push({
+        basePrice: baseUSD,
+        serviceCode: service.code,
+        country: service.country,
+      });
+      serviceMetadata.push({
+        key: `${service.code}-${service.country}`,
+        providerData: service,
+        providerId: PROVIDERS.LION.id,
+        providerName: "sms-man",
+      });
     });
 
-    // Process TextVerified services: USD prices → apply markup (20% + 2000 NGN)
-    console.log("[Processing] TextVerified services (USD) with full markup...");
+    // Process TextVerified services: USD base price
+    console.log(
+      "[Processing] Collecting TextVerified base prices for admin pricing rules..."
+    );
     tvServices.forEach((service: any, idx: number) => {
-      const key = `${service.code}-${service.country}`;
-      // TextVerified services have price: 0 initially, will be fetched on-demand
       const baseUSD = service.price || 0;
-      const flatFeeUSD = FLAT_FEE_NGN / usdToNgnRate;
-      const priceUSD = Number(
-        (baseUSD * (1 + MARKUP_PERCENTAGE) + flatFeeUSD).toFixed(2)
-      );
 
       if (idx === 0 && tvServices.length > 0) {
         console.log(
-          `[TextVerified] Sample: ${service.name} = ${baseUSD} USD → ${priceUSD} USD (×1.20 + ₦${FLAT_FEE_NGN})`
+          `[TextVerified] Sample base: ${service.name} = ${baseUSD} USD (before admin markup)`
         );
       }
 
-      if (!servicesMap.has(key)) {
-        servicesMap.set(key, {
+      servicesToPrice.push({
+        basePrice: baseUSD,
+        serviceCode: service.code,
+        country: service.country,
+      });
+      serviceMetadata.push({
+        key: `${service.code}-${service.country}`,
+        providerData: service,
+        providerId: PROVIDERS.PANDA.id,
+        providerName: "textverified",
+      });
+    });
+
+    // Apply admin pricing rules to all services in batch
+    console.log("[Pricing] Applying admin pricing rules to all services...");
+    const pricingResults = await PricingService.calculatePrices(
+      servicesToPrice
+    );
+
+    // Log first pricing result for debugging
+    if (pricingResults.length > 0) {
+      const firstResult = pricingResults[0];
+      console.log(
+        `[Pricing] Sample result: base $${firstResult.basePrice.toFixed(
+          4
+        )} + profit $${firstResult.profit.toFixed(
+          4
+        )} = $${firstResult.finalPrice.toFixed(4)}`,
+        firstResult.ruleApplied
+          ? `(Rule: ${firstResult.ruleApplied.profitType} ${
+              firstResult.ruleApplied.profitValue
+            }${
+              firstResult.ruleApplied.profitType === "PERCENTAGE" ? "%" : " USD"
+            })`
+          : "(Default 20% markup)"
+      );
+    }
+
+    // Build services map with priced data
+    pricingResults.forEach((priceResult, idx) => {
+      const metadata = serviceMetadata[idx];
+      const service = metadata.providerData;
+      const priceUSD = Number(priceResult.finalPrice.toFixed(2));
+
+      if (!servicesMap.has(metadata.key)) {
+        servicesMap.set(metadata.key, {
           code: service.code,
           name: service.name,
           country: service.country,
           price: priceUSD,
-          prices: { [PROVIDERS.PANDA.id]: priceUSD },
+          prices: { [metadata.providerId]: priceUSD },
           currency: "USD",
-          providerId: "textverified",
+          providerId: metadata.providerName,
           capability: service.capability || "sms",
           ui: {
             logo: "📱",
@@ -190,23 +212,31 @@ export async function GET(req: NextRequest) {
           },
           providers: [
             {
-              id: PROVIDERS.PANDA.id,
-              name: "textverified",
-              displayName: PROVIDERS.PANDA.displayName,
+              id: metadata.providerId,
+              name: metadata.providerName,
+              displayName:
+                metadata.providerName === "sms-man"
+                  ? PROVIDERS.LION.displayName
+                  : PROVIDERS.PANDA.displayName,
             },
           ],
         });
       } else {
-        const existing = servicesMap.get(key);
+        const existing = servicesMap.get(metadata.key);
         existing.prices = existing.prices || {};
-        existing.prices[PROVIDERS.PANDA.id] = priceUSD;
+        existing.prices[metadata.providerId] = priceUSD;
         existing.capability =
           service.capability || existing.capability || "sms";
-        if (!existing.providers.find((p: any) => p.id === PROVIDERS.PANDA.id)) {
+        if (
+          !existing.providers.find((p: any) => p.id === metadata.providerId)
+        ) {
           existing.providers.push({
-            id: PROVIDERS.PANDA.id,
-            name: "textverified",
-            displayName: PROVIDERS.PANDA.displayName,
+            id: metadata.providerId,
+            name: metadata.providerName,
+            displayName:
+              metadata.providerName === "sms-man"
+                ? PROVIDERS.LION.displayName
+                : PROVIDERS.PANDA.displayName,
           });
         }
       }
@@ -220,7 +250,7 @@ export async function GET(req: NextRequest) {
     console.log("\n[Summary] ✓ Aggregation complete:");
     console.log(`  • Total unique services: ${result.services.length}`);
     console.log(`  • Providers: ${result.providers.length}`);
-    console.log(`  • All prices in: USD`);
+    console.log(`  • All prices in: USD (with admin pricing rules applied)`);
     console.log(`  • SMS-Man (RUB→USD): ${smsManServices.length} services`);
     console.log(`  • TextVerified (USD): ${tvServices.length} services`);
     if (result.services.length > 0) {
