@@ -35,7 +35,7 @@ import {
   CheckCircle,
   XCircle,
   Edit,
-  Sync,
+  RotateCcw,
 } from "lucide-react";
 
 const getHealthColor = (status: string) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -9,25 +9,17 @@ import {
   ShoppingCart,
   Wallet,
   User,
-  Settings,
   Shield,
   LogOut,
   Menu,
-  X,
-  DollarSignIcon,
-  PlusCircleIcon,
-  PhoneCallIcon,
-  Zap,
+  DollarSign,
+  PlusCircle,
+  Phone,
 } from "lucide-react";
 import {
   SidebarProvider,
   Sidebar,
   SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar";
@@ -42,7 +34,6 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   const { user, logout } = useAuth();
   const isMobile = useIsMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -56,7 +47,7 @@ export default function DashboardLayout({
     {
       name: "Buy Numbers",
       href: "/orders/new",
-      icon: PlusCircleIcon,
+      icon: PlusCircle,
     },
     {
       name: "Orders",
@@ -71,7 +62,7 @@ export default function DashboardLayout({
     {
       name: "Transactions",
       href: "/transactions",
-      icon: DollarSignIcon,
+      icon: DollarSign,
     },
     {
       name: "Profile",
@@ -81,45 +72,7 @@ export default function DashboardLayout({
     {
       name: "Contact Us",
       href: "/contact",
-      icon: PhoneCallIcon,
-    },
-  ];
-
-  const adminNav = [
-    {
-      name: "Admin Dashboard",
-      href: "/admin",
-      icon: Shield,
-    },
-    {
-      name: "Users",
-      href: "/admin/users",
-      icon: User,
-    },
-    {
-      name: "Orders",
-      href: "/admin/orders",
-      icon: ShoppingCart,
-    },
-    {
-      name: "Transactions",
-      href: "/admin/transactions",
-      icon: DollarSignIcon,
-    },
-    {
-      name: "Wallets",
-      href: "/admin/wallets",
-      icon: Wallet,
-    },
-    {
-      name: "Providers",
-      href: "/admin/providers",
-      icon: Zap,
-    },
-    {
-      name: "Settings",
-      href: "/admin/settings",
-      icon: Settings,
+      icon: Phone,
     },
   ];
 
@@ -134,11 +87,15 @@ export default function DashboardLayout({
     return pathname.startsWith(href);
   };
 
+  const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
+
   const SidebarContentComponent = () => (
     <>
       <div className="p-6 border-b">
-        <h1 className="text-2xl font-bold text-blue-600">DarNumber</h1>
-        <p className="text-sm text-muted-foreground mt-1">SMS Verification</p>
+        <Link href="/" className="block">
+          <h1 className="text-2xl font-bold text-blue-600">DarNumber</h1>
+          <p className="text-sm text-muted-foreground mt-1">SMS Verification</p>
+        </Link>
       </div>
 
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -161,27 +118,17 @@ export default function DashboardLayout({
           );
         })}
 
-        {user?.role === "ADMIN" && (
+        {isAdmin && (
           <>
             <div className="border-t my-4" />
-            {adminNav.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => isMobile && setMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                    isActive(item.href)
-                      ? "bg-purple-50 text-purple-600 font-medium"
-                      : "text-gray-700 hover:bg-gray-100"
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  {item.name}
-                </Link>
-              );
-            })}
+            <Link
+              href="/admin"
+              onClick={() => isMobile && setMobileMenuOpen(false)}
+              className="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gradient-to-r from-purple-50 to-indigo-50 text-purple-600 font-medium border border-purple-200 hover:from-purple-100 hover:to-indigo-100"
+            >
+              <Shield className="w-5 h-5" />
+              Admin Panel
+            </Link>
           </>
         )}
       </nav>
