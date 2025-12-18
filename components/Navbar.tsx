@@ -130,10 +130,19 @@ const Navbar = () => {
                 size="lg"
                 variant="outline"
                 className="w-full rounded-2xl h-14 text-lg"
+                onClick={() => {
+                  window.location.href = "/login";
+                }}
               >
                 Log in
               </Button>
-              <Button size="lg" className="w-full rounded-2xl h-14 text-lg">
+              <Button
+                size="lg"
+                className="w-full rounded-2xl h-14 text-lg"
+                onClick={() => {
+                  window.location.href = "/login";
+                }}
+              >
                 Get Started
               </Button>
             </div>

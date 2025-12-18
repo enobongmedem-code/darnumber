@@ -1,4 +1,3 @@
-import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -129,8 +128,6 @@ const stats = [
 ];
 
 const Index = () => {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
@@ -149,7 +146,7 @@ const Index = () => {
               </Badge>
               <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-foreground leading-tight mb-6">
                 Verify Accounts{" "}
-                <span className="text-transparent bg-clip-text bg-linear-to-r from-primary to-purple-600">
+                <span className="text-transparent bg-clip-text bg-linear-to-r from-primary to-primary">
                   Instantly
                 </span>
               </h1>
@@ -159,16 +156,20 @@ const Index = () => {
                 and affordable.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                <Button size="lg" className="w-full sm:w-auto text-base px-8">
-                  Start Verifying
-                  <ArrowRight className="w-5 h-5 ml-2" />
+                <Button size="lg" className="w-full sm:w-auto text-base px-8" asChild>
+                  <Link href="/login">
+                    Start Verifying
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </Link>
                 </Button>
+
                 <Button
                   size="lg"
                   variant="outline"
                   className="w-full sm:w-auto text-base px-8"
+                  asChild
                 >
-                  See How It Works
+                  <Link href="/#how-it-works">See How It Works</Link>
                 </Button>
               </div>
               <div className="mt-8 flex flex-wrap items-center justify-center lg:justify-start gap-6 text-sm text-muted-foreground">
@@ -357,8 +358,12 @@ const Index = () => {
                 and receive your code with industry-leading delivery speed.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
-                <Button>Create Account</Button>
-                <Button variant="outline">How it works</Button>
+                <Button>
+                  <Link href="/signup"> Create Account</Link>
+                </Button>
+                <Button variant="outline">
+                  <Link href="/#how-it-works"> How it works</Link>
+                </Button>
               </div>
             </div>
           </div>
@@ -380,8 +385,12 @@ const Index = () => {
                 speed, clarity, and accessibility across devices.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
-                <Button variant="default">Explore Dashboard</Button>
-                <Button variant="outline">Contact Us</Button>
+                <Button variant="default">
+                  <Link href="/dashboard">Explore Dashboard</Link>
+                </Button>
+                <Button variant="outline">
+                  <Link href="/contact"> Contact Us</Link>
+                </Button>
               </div>
             </div>
           </div>
@@ -449,7 +458,7 @@ const Index = () => {
             free!
           </p>
           <Button size="lg" variant="secondary" className="text-base px-8">
-            Create Free Account
+            <Link href="/signup">Create Free Account</Link>
             <ArrowRight className="w-5 h-5 ml-2" />
           </Button>
         </div>
