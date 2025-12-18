@@ -156,7 +156,11 @@ const Index = () => {
                 and affordable.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                <Button size="lg" className="w-full sm:w-auto text-base px-8" asChild>
+                <Button
+                  size="lg"
+                  className="w-full sm:w-auto text-base px-8"
+                  asChild
+                >
                   <Link href="/login">
                     Start Verifying
                     <ArrowRight className="w-5 h-5 ml-2" />
