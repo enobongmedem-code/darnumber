@@ -179,8 +179,11 @@ export default function OrderDetailPage() {
       toast.order.cancelled(order?.orderNumber);
       fetchOrder();
     } catch (err) {
-      const error = err as { response?: { data?: { error?: string } } };
-      const errorMsg = error.response?.data?.error || "Failed to cancel order";
+      const error = err as {
+        response?: { data?: { error?: { message: string } } };
+      };
+      const errorMsg =
+        error.response?.data?.error?.message || "Failed to cancel order";
       toast.error("Cancel failed", errorMsg);
       setError(errorMsg);
     } finally {

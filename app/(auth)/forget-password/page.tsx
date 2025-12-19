@@ -27,7 +27,7 @@ export default function ForgetPasswordPage() {
       toast.auth.passwordResetSent();
     } catch (err: any) {
       const errorMsg =
-        err.response?.data?.error ||
+        err.response?.data?.error?.message ||
         "Failed to send reset email. Please try again.";
       setError(errorMsg);
       toast.error("Request failed", errorMsg);

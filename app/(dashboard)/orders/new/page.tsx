@@ -490,8 +490,10 @@ export default function NewOrderPage() {
     } catch (err: unknown) {
       let message = "Failed to create order. Please try again.";
       if (typeof err === "object" && err && "response" in err) {
-        const e = err as { response?: { data?: { error?: string } } };
-        message = e.response?.data?.error || message;
+        const e = err as {
+          response?: { data?: { error?: { message: string } } };
+        };
+        message = e.response?.data?.error?.message || message;
       }
       toast.order.failed(message);
       setError(message);
