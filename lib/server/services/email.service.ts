@@ -4,7 +4,7 @@ import { Resend } from "resend";
 const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
 const EMAIL_FROM =
   process.env.EMAIL_FROM || "DarNumber <noreply@darnumber.com>";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://darnumber.com";
 
 // Create Resend client
 const createResendClient = () => {
@@ -82,7 +82,7 @@ export async function sendPasswordResetEmail(
   <title>Reset Your Password</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+  <div style="background: #667eea; padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
     <h1 style="color: white; margin: 0; font-size: 28px;">DarNumber</h1>
   </div>
   
@@ -94,7 +94,7 @@ export async function sendPasswordResetEmail(
     <p>We received a request to reset the password for your DarNumber account. Click the button below to set a new password:</p>
     
     <div style="text-align: center; margin: 30px 0;">
-      <a href="${resetUrl}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
+      <a href="${resetUrl}" style="background: #667eea; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
         Reset Password
       </a>
     </div>
@@ -150,7 +150,7 @@ export async function sendContactConfirmationEmail(
   <title>We Received Your Message</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+  <div style="background: #667eea; padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
     <h1 style="color: white; margin: 0; font-size: 28px;">DarNumber</h1>
   </div>
   
@@ -323,7 +323,7 @@ export async function sendWelcomeEmail(
   <title>Welcome to DarNumber</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+  <div style="background: #667eea; padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
     <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to DarNumber!</h1>
   </div>
   
@@ -341,7 +341,7 @@ export async function sendWelcomeEmail(
     </ul>
     
     <div style="text-align: center; margin: 30px 0;">
-      <a href="${APP_URL}/dashboard" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
+      <a href="${APP_URL}/dashboard" style="background: #667eea; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
         Go to Dashboard
       </a>
     </div>

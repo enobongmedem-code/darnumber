@@ -191,7 +191,7 @@ export class PaymentService {
 
       if (!process.env.NEXTAUTH_URL) {
         throw new Error(
-          "Missing NEXTAUTH_URL for Flutterwave redirect. Set NEXTAUTH_URL (e.g., http://localhost:3000)."
+          "Missing NEXTAUTH_URL for Flutterwave redirect. Set NEXTAUTH_URL (e.g., https://darnumber.com)."
         );
       }
 
