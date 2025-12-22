@@ -506,6 +506,7 @@ export default function NewOrderPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Spinner />
+        <span className="ml-2">Loading services...</span>
       </div>
     );
   }
