@@ -1,10 +1,7 @@
 import { NextRequest } from "next/server";
 import { json, error } from "@/lib/server/utils/response";
-import {
-  SMSManService,
-  TextVerifiedService,
-} from "@/lib/server/services/order.service";
-
+import { SMSManService } from "@/lib/server/services/order.service";
+import { TextVerifiedService } from "@/lib/server/services/textverified.service";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
