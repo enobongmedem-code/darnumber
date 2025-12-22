@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { json, error } from "@/lib/server/utils/response";
-import { TextVerifiedService } from "@/lib/server/services/order.service";
+import { TextVerifiedService } from "@/lib/server/services/textverified.service";
 import { ExchangeRateService } from "@/lib/server/services/exchange-rate.service";
 import { PricingService } from "@/lib/server/services/pricing.service";
 
@@ -21,12 +21,25 @@ export async function GET(req: NextRequest) {
   try {
     const textVerifiedService = new TextVerifiedService();
 
-    // 1. Get base USD price from TextVerified
-    const baseUsdPrice = await textVerifiedService.fetchAndCacheServicePrice(
-      serviceName
-    );
+    // 1. Get base USD price from TextVerified using the new pricing API
+    const baseUsdPrice = await textVerifiedService
+      .getServicePricing({
+        serviceName,
+        areaCode: false, // Default: no specific area code
+        carrier: false, // Default: no specific carrier
+        numberType: "mobile", // Default: mobile numbers
+        capability: "sms", // Default: SMS capability
+      })
+      .then((result) => result.price)
+      .catch(() => {
+        // Fallback to default price if pricing fails
+        console.warn(
+          `[TextVerified][Price] Using default price for ${serviceName}`
+        );
+        return 0; // Default base price in USD
+      });
 
-    if (baseUsdPrice === null) {
+    if (baseUsdPrice === null || baseUsdPrice === undefined) {
       return error("Price not found for this service", 404);
     }
 

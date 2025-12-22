@@ -2,10 +2,8 @@ import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/server/auth";
 import { json, error } from "@/lib/server/utils/response";
 import { PROVIDERS } from "@/lib/constants/providers";
-import {
-  SMSManService,
-  TextVerifiedService,
-} from "@/lib/server/services/order.service";
+import { SMSManService } from "@/lib/server/services/order.service";
+import { TextVerifiedService } from "@/lib/server/services/textverified.service";
 import { ExchangeRateService } from "@/lib/server/services/exchange-rate.service";
 import { PricingService } from "@/lib/server/services/pricing.service";
 
@@ -153,12 +151,17 @@ export async function GET(req: NextRequest) {
 
       servicesToPrice.push({
         basePrice: baseUSD,
-        serviceCode: service.code,
-        country: service.country,
+        serviceCode: service.serviceName || service.code, // Use serviceName from new API
+        country: service.country || "US", // TextVerified is US only
       });
       serviceMetadata.push({
-        key: `${service.code}-${service.country}`,
-        providerData: service,
+        key: `${service.serviceName || service.code}-US`,
+        providerData: {
+          ...service,
+          code: service.serviceName || service.code,
+          country: "US",
+          name: service.serviceName || service.name,
+        },
         providerId: PROVIDERS.PANDA.id,
         providerName: "textverified",
       });
