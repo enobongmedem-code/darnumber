@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/lib/toast";
+import { formatPhone } from "@/lib/phone";
 
 export default function OrderDetailPage() {
   const router = useRouter();
@@ -113,7 +114,7 @@ export default function OrderDetailPage() {
           if (s.code && (s.ui?.displayName || s.name)) {
             serviceMap.set(
               String(s.code).toUpperCase(),
-              s.ui?.displayName || s.name
+              s.ui?.displayName || s.name,
             );
           }
         });
@@ -162,7 +163,7 @@ export default function OrderDetailPage() {
     if (order?.status === "COMPLETED" && order.smsCode) {
       toast.success(
         "Order completed!",
-        `Your verification code is ${order.smsCode}`
+        `Your verification code is ${order.smsCode}`,
       );
     }
   }, [order?.status, order?.smsCode]);
@@ -225,7 +226,7 @@ export default function OrderDetailPage() {
   };
 
   const canCancel = ["PENDING", "PROCESSING", "WAITING_FOR_SMS"].includes(
-    order.status
+    order.status,
   );
 
   const formatDuration = (ms: number) => {
@@ -272,9 +273,10 @@ export default function OrderDetailPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() =>
-                  copyToClipboard(order.phoneNumber!, "Phone number")
-                }
+                onClick={() => {
+                  const fmt = formatPhone(order.phoneNumber!, order.country);
+                  copyToClipboard(fmt.e164, "Phone number");
+                }}
                 className="h-8 px-2 hover:bg-blue-100 dark:hover:bg-blue-900"
               >
                 <svg
@@ -294,7 +296,7 @@ export default function OrderDetailPage() {
               </Button>
             </div>
             <p className="text-2xl font-bold font-mono text-blue-700 dark:text-blue-300">
-              +{order.phoneNumber}
+              {formatPhone(order.phoneNumber!, order.country).display}
             </p>
           </div>
         )}
