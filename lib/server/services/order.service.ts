@@ -19,14 +19,14 @@ async function fetchWithRetry(
   url: string,
   options: RequestInit,
   retries = 3,
-  backoff = 300
+  backoff = 300,
 ): Promise<Response> {
   try {
     const res = await fetch(url, options);
     if (res.status === 429 && retries > 0) {
       const retryAfter = parseInt(res.headers.get("Retry-After") || "1");
       console.warn(
-        `[fetchWithRetry] Rate limited. Retrying after ${retryAfter}s...`
+        `[fetchWithRetry] Rate limited. Retrying after ${retryAfter}s...`,
       );
       await delay(retryAfter * 1000);
       return fetchWithRetry(url, options, retries - 1, backoff);
@@ -40,7 +40,7 @@ async function fetchWithRetry(
       console.warn(
         `[fetchWithRetry] Network error (${
           e.code || "FETCH_FAILED"
-        }). Retrying in ${backoff}ms... (${retries} retries left)`
+        }). Retrying in ${backoff}ms... (${retries} retries left)`,
       );
       await delay(backoff);
       return fetchWithRetry(url, options, retries - 1, backoff * 2);
@@ -72,7 +72,7 @@ export class OrderService {
     const providers = await this.getAvailableProviders(
       serviceCode,
       country,
-      preferredProvider
+      preferredProvider,
     );
     if (!providers.length) {
       throw new Error("No providers available for this service and country.");
@@ -134,13 +134,13 @@ export class OrderService {
     try {
       const providerService = this.getProviderService(selectedProvider.name);
       console.log(
-        `[OrderService] Requesting number from ${selectedProvider.name}...`
+        `[OrderService] Requesting number from ${selectedProvider.name}...`,
       );
 
       const providerOrder = await providerService.requestNumber(
         serviceCode,
         country,
-        order.id // Pass orderId for logging and context
+        order.id, // Pass orderId for logging and context
       );
 
       // Update order with provider details
@@ -165,7 +165,7 @@ export class OrderService {
     } catch (e) {
       console.error(
         `[OrderService] Provider request failed for order ${order.id}. Refunding...`,
-        e
+        e,
       );
       // If provider fails, refund the order
       await this.refundOrder(order.id, "PROVIDER_FAILURE");
@@ -174,7 +174,7 @@ export class OrderService {
   }
 
   private getProviderService(
-    providerName: string
+    providerName: string,
   ): SMSManService | TextVerifiedService {
     const name = providerName.toLowerCase();
     if (name.includes("lion") || name.includes("sms-man")) {
@@ -189,7 +189,7 @@ export class OrderService {
   async getAvailableProviders(
     serviceCode: string,
     country: string,
-    preferred?: string
+    preferred?: string,
   ) {
     // Use hardcoded providers instead of DB queries
     const availableProviders: Array<{
@@ -229,7 +229,7 @@ export class OrderService {
   async calculatePricing(
     providerId: string,
     serviceCode: string,
-    country: string
+    country: string,
   ) {
     const cacheKey = `pricing:${providerId}:${serviceCode}:${country}`;
     const cached = await redis.get(cacheKey);
@@ -280,7 +280,7 @@ export class OrderService {
         await this.tryFetchAndUpdateSmsCode(
           orderId,
           cached.provider,
-          cached.externalId
+          cached.externalId,
         );
         // Re-fetch after possible update
         const refreshed = await redis.getOrderStatus(orderId);
@@ -289,7 +289,7 @@ export class OrderService {
       return cached;
     }
 
-    const order = await prisma.order.findUnique({
+    let order = await prisma.order.findUnique({
       where: { id: orderId },
       select: {
         id: true,
@@ -343,7 +343,7 @@ export class OrderService {
     } catch (e) {
       console.warn(
         "[OrderService] TextVerified details refresh failed",
-        e instanceof Error ? e.message : String(e)
+        e instanceof Error ? e.message : String(e),
       );
     }
 
@@ -352,7 +352,7 @@ export class OrderService {
       await this.tryFetchAndUpdateSmsCode(
         order.id,
         order.providerId,
-        order.externalId
+        order.externalId,
       );
       // Re-fetch after possible update
       const refreshed = await prisma.order.findUnique({
@@ -371,14 +371,11 @@ export class OrderService {
           providerId: true,
           externalId: true,
           smsCode: true,
+          smsMessage: true,
         },
       });
       if (refreshed) {
-        const payload = { ...refreshed, provider: refreshed.providerId };
-        delete (payload as any).providerId;
-        await redis.setOrderStatus(orderId, payload, 300);
-        console.log("[OrderService] getOrderStatus payload", payload);
-        return payload;
+        order = refreshed; // Update order with refreshed data
       }
     }
 
@@ -448,7 +445,7 @@ export class OrderService {
         console.error(
           "[OrderService] Failed to auto-expire order",
           order.id,
-          e
+          e,
         );
       }
     }
@@ -469,7 +466,7 @@ export class OrderService {
   private async tryFetchAndUpdateSmsCode(
     orderId: string,
     providerId: string,
-    externalId?: string | null
+    externalId?: string | null,
   ) {
     if (!externalId) return;
     let code: string | undefined;
@@ -482,13 +479,13 @@ export class OrderService {
         const detailsUrl = externalId;
         console.log(
           "[tryFetchAndUpdateSmsCode] Fetching TextVerified:",
-          detailsUrl
+          detailsUrl,
         );
         // Try fetching messages from /messages endpoint
         const messagesUrl = `${detailsUrl}/messages`;
         console.log(
           "[tryFetchAndUpdateSmsCode] Also trying messages URL:",
-          messagesUrl
+          messagesUrl,
         );
         let res = await fetch(messagesUrl, {
           headers: { Authorization: `Bearer ${await tv.getBearerToken()}` },
@@ -496,7 +493,7 @@ export class OrderService {
         if (!res.ok) {
           // Fallback to details URL
           console.log(
-            "[tryFetchAndUpdateSmsCode] Messages URL failed, trying details URL"
+            "[tryFetchAndUpdateSmsCode] Messages URL failed, trying details URL",
           );
           res = await fetch(detailsUrl, {
             headers: { Authorization: `Bearer ${await tv.getBearerToken()}` },
@@ -504,13 +501,13 @@ export class OrderService {
         }
         console.log(
           "[tryFetchAndUpdateSmsCode] TextVerified fetch status:",
-          res.status
+          res.status,
         );
         if (res.ok) {
           const data = await res.json();
           console.log(
             "[tryFetchAndUpdateSmsCode] TextVerified response:",
-            JSON.stringify(data, null, 2)
+            JSON.stringify(data, null, 2),
           );
           // TextVerified: code may be in data.messages[0].parsed_code or message content
           let foundCode = null;
@@ -562,18 +559,18 @@ export class OrderService {
             status = "COMPLETED";
             console.log(
               "[tryFetchAndUpdateSmsCode] Found code in TextVerified:",
-              code
+              code,
             );
           } else {
             console.log(
-              "[tryFetchAndUpdateSmsCode] No code found in TextVerified response"
+              "[tryFetchAndUpdateSmsCode] No code found in TextVerified response",
             );
           }
         } else {
           console.log(
             "[tryFetchAndUpdateSmsCode] TextVerified fetch failed:",
             res.status,
-            await res.text()
+            await res.text(),
           );
         }
       } else if (providerId === "sms-man") {
@@ -587,18 +584,18 @@ export class OrderService {
         const url = `https://api.sms-man.com/control/get-sms?token=${apiKey}&request_id=${externalId}`;
         console.log(
           "[tryFetchAndUpdateSmsCode] Fetching SMS-Man:",
-          url.replace(apiKey, "***")
+          url.replace(apiKey, "***"),
         );
         const res = await fetch(url);
         console.log(
           "[tryFetchAndUpdateSmsCode] SMS-Man fetch status:",
-          res.status
+          res.status,
         );
         if (res.ok) {
           const data = await res.json();
           console.log(
             "[tryFetchAndUpdateSmsCode] SMS-Man response:",
-            JSON.stringify(data, null, 2)
+            JSON.stringify(data, null, 2),
           );
           let foundSms = null;
           if (
@@ -632,18 +629,18 @@ export class OrderService {
             status = "COMPLETED";
             console.log(
               "[tryFetchAndUpdateSmsCode] Found code in SMS-Man:",
-              code
+              code,
             );
           } else {
             console.log(
-              "[tryFetchAndUpdateSmsCode] No code found in SMS-Man response"
+              "[tryFetchAndUpdateSmsCode] No code found in SMS-Man response",
             );
           }
         } else {
           console.log(
             "[tryFetchAndUpdateSmsCode] SMS-Man fetch failed:",
             res.status,
-            await res.text()
+            await res.text(),
           );
         }
       }
@@ -685,7 +682,7 @@ export class OrderService {
 
   async refundOrder(
     orderId: string,
-    reason: "USER_CANCELLED" | "PROVIDER_FAILURE" | "EXPIRED"
+    reason: "USER_CANCELLED" | "PROVIDER_FAILURE" | "EXPIRED",
   ) {
     return await prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
@@ -711,7 +708,7 @@ export class OrderService {
         order.status === "CANCELLED"
       ) {
         console.warn(
-          `[Refund] Order ${orderId} is already in a final state (${order.status}). No refund will be processed.`
+          `[Refund] Order ${orderId} is already in a final state (${order.status}). No refund will be processed.`,
         );
         return;
       }
@@ -752,7 +749,7 @@ export class OrderService {
       });
 
       console.log(
-        `[Refund] Successfully processed refund for order ${orderId}.`
+        `[Refund] Successfully processed refund for order ${orderId}.`,
       );
     });
   }
@@ -866,7 +863,7 @@ export class SMSManService {
       const applications = Object.values(applicationsData);
 
       console.log(
-        `[SMSManService] Loaded ${countries.length} countries, ${applications.length} applications`
+        `[SMSManService] Loaded ${countries.length} countries, ${applications.length} applications`,
       );
 
       // Create lookup maps for fast processing
@@ -916,13 +913,13 @@ export class SMSManService {
                 providerId: "sms-man",
                 currency: "RUB",
               });
-            }
+            },
           );
-        }
+        },
       );
 
       console.log(
-        `[SMSManService] Successfully processed ${services.length} services`
+        `[SMSManService] Successfully processed ${services.length} services`,
       );
       return services;
     } catch (err) {
@@ -930,7 +927,7 @@ export class SMSManService {
       throw new Error(
         `SMS-Man API failed: ${
           err instanceof Error ? err.message : "Unknown error"
-        }`
+        }`,
       );
     }
   }
@@ -939,8 +936,31 @@ export class SMSManService {
     if (!this.apiKey) throw new Error("SMS-Man API key not configured");
     const url = `${this.apiUrl}/cancel-request?token=${this.apiKey}&request_id=${externalId}`;
     const res = await fetch(url, { method: "GET" });
+
+    // Check if response is JSON before parsing
+    const contentType = res.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      // If the request is already closed/expired, SMS-Man may return HTML error page
+      if (!res.ok) {
+        console.warn(
+          `[SMSManService] Cancel request ${externalId} failed with status ${res.status} (likely already closed)`,
+        );
+        return; // Don't throw - order likely already expired on provider side
+      }
+    }
+
     const data = await res.json();
     if (data.success === false) {
+      // If error is "wrong_status" or similar, it's likely already closed
+      if (
+        data.error_code === "wrong_status" ||
+        data.error_msg?.includes("already closed")
+      ) {
+        console.warn(
+          `[SMSManService] Request ${externalId} already closed: ${data.error_msg}`,
+        );
+        return; // Don't throw - this is expected for expired orders
+      }
       throw new Error(data.error_msg || "Failed to cancel SMS-Man request");
     }
     console.log(`[SMSManService] Cancelled request ${externalId}`);
@@ -949,7 +969,7 @@ export class SMSManService {
   async requestNumber(
     serviceCode: string,
     country: string,
-    orderId: string
+    orderId: string,
   ): Promise<{ id: string; phoneNumber: string; cost?: number }> {
     console.log("[SMSManService] requestNumber", {
       serviceCode,
@@ -1043,7 +1063,7 @@ export class SMSManService {
     await redis.set(
       cacheKey,
       JSON.stringify(Object.fromEntries(countryMap)),
-      60 * 60 * 24 // Cache for 24 hours
+      60 * 60 * 24, // Cache for 24 hours
     );
 
     return countryMap;
@@ -1059,10 +1079,10 @@ export class SMSManService {
     if (!countryId) {
       console.warn(
         `[SMSManService] Country code "${countryCode}" not found in SMS-Man. Available: ${Array.from(
-          countries.keys()
+          countries.keys(),
         )
           .slice(0, 10)
-          .join(", ")}...`
+          .join(", ")}...`,
       );
       throw new Error(`Country "${countryCode}" is not supported by SMS-Man`);
     }
