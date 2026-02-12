@@ -380,6 +380,8 @@ export class OrderService {
     }
 
     // Auto-expire orders that have passed their expiry window
+    // The refundOrder method has its own atomic guard to prevent double refunds,
+    // so even if two concurrent requests enter this block, only one refund will process.
     if (
       order.expiresAt &&
       new Date(order.expiresAt).getTime() < Date.now() &&
@@ -388,7 +390,7 @@ export class OrderService {
         order.status === "WAITING_FOR_SMS")
     ) {
       try {
-        // Attempt provider cancellation before refund
+        // Attempt provider cancellation before refund (idempotent, safe if called twice)
         try {
           if (order.externalId) {
             const providerService = this.getProviderService(order.providerId);
@@ -705,7 +707,9 @@ export class OrderService {
       if (
         order.status === "REFUNDED" ||
         order.status === "COMPLETED" ||
-        order.status === "CANCELLED"
+        order.status === "CANCELLED" ||
+        order.status === "FAILED" ||
+        order.status === "EXPIRED"
       ) {
         console.warn(
           `[Refund] Order ${orderId} is already in a final state (${order.status}). No refund will be processed.`,
@@ -720,10 +724,26 @@ export class OrderService {
       if (reason === "PROVIDER_FAILURE") newStatus = "FAILED";
       if (reason === "EXPIRED") newStatus = "EXPIRED";
 
-      await tx.order.update({
-        where: { id: orderId },
+      // Atomic update: only update if order is still in a refundable state
+      // This prevents race conditions where two concurrent refund attempts
+      // both pass the status check above before either commits.
+      const updated = await tx.order.updateMany({
+        where: {
+          id: orderId,
+          status: {
+            notIn: ["REFUNDED", "COMPLETED", "CANCELLED", "FAILED", "EXPIRED"],
+          },
+        },
         data: { status: newStatus },
       });
+
+      // If no rows were updated, another refund already went through
+      if (updated.count === 0) {
+        console.warn(
+          `[Refund] Order ${orderId} was already processed by a concurrent refund. Aborting.`,
+        );
+        return;
+      }
 
       // Refund the money
       const newBalance = order.user.balance.add(order.price);

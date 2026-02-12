@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 // Issue a refund for an order
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ orderId: string }> }
+  { params }: { params: Promise<{ orderId: string }> },
 ) {
   try {
     const session = await requireAuth();
@@ -29,14 +29,40 @@ export async function POST(
       return error("Order not found", 404);
     }
 
-    if (order.status === "REFUNDED") {
-      return error("Order already refunded", 400);
+    if (
+      order.status === "REFUNDED" ||
+      order.status === "CANCELLED" ||
+      order.status === "FAILED" ||
+      order.status === "EXPIRED"
+    ) {
+      return error(
+        `Order already in final state: ${order.status}. A refund was already processed.`,
+        400,
+      );
     }
 
     const refundAmount = Number(order.finalPrice);
 
     // Perform refund in a transaction
     const result = await prisma.$transaction(async (tx) => {
+      // Atomic check: only proceed if order is still in a refundable state
+      // This prevents race conditions with auto-expire or concurrent admin actions
+      const freshOrder = await tx.order.findUnique({
+        where: { id: orderId },
+        select: { status: true },
+      });
+      if (
+        !freshOrder ||
+        freshOrder.status === "REFUNDED" ||
+        freshOrder.status === "CANCELLED" ||
+        freshOrder.status === "FAILED" ||
+        freshOrder.status === "EXPIRED"
+      ) {
+        throw new Error(
+          `Order already in final state: ${freshOrder?.status}. Refund aborted.`,
+        );
+      }
+
       // Get current user balance
       const user = await tx.user.findUnique({
         where: { id: order.userId },
